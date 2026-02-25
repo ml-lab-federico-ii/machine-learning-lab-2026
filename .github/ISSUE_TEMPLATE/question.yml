@@ -1,0 +1,12 @@
+name: "Domanda (usa Discussions)"
+description: "Le domande vanno su GitHub Discussions"
+title: "[QUESTION] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Per domande, dubbi e chiarimenti usa **GitHub Discussions**:
+        https://github.com/ml-lab-federico-ii/machine-learning-lab-2026/discussions
+
+        Questa Issue verrà chiusa.

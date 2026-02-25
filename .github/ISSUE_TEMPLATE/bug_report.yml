@@ -1,0 +1,55 @@
+name: "Bug report"
+description: "Segnala un problema riproducibile nei materiali/notebook"
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Grazie per la segnalazione. Per domande generiche usa **Discussions**.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: "Descrizione"
+      description: "Cosa non funziona?"
+      placeholder: "Descrivi il problema in modo conciso."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Passi per riprodurre"
+      description: "Elenca i passi (1, 2, 3...)."
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Comportamento atteso"
+      placeholder: "Cosa ti aspettavi che accadesse?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Comportamento osservato"
+      placeholder: "Cosa è successo invece? (inclusi errori/log)"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: "Ambiente"
+      description: "OS + Python version (e altre info utili)"
+      placeholder: "Windows 11, Python 3.11"
+    validations:
+      required: false
