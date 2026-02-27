@@ -143,20 +143,35 @@ Do NOT introduce new heavy dependencies unless asked.
 
 # Notebook template (MUST follow)
 
-Every lesson notebook must have the same skeleton and headings, in this order.
+Every lesson notebook must follow the same **section skeleton** (0–10) in the same order.
+The template is **agnostic to lesson content**: objectives, models, plots, and exercises will vary by lesson and can be filled in later.
 
 Checklist (enforceable):
 - Cell 0 is a **Title markdown cell** including: course name, lesson number & title, authors, emails, last updated date (YYYY-MM-DD).
 - Sections 1–10 exist and appear **in order**, with the exact heading numbers.
 
-## Multi-notebook workflow (MUST)
+## Two notebooks per lesson (MUST)
 
-The 0–10 structure below can look like a single end-to-end notebook, but the course may use **multiple notebooks per lesson** (or across lessons).
+Each lesson directory under `notebooks/lesson-0N/` must contain **two notebooks**:
 
-Rules for splitting work across notebooks:
-- Each notebook must still include sections **0–10 in order**, but sections can be **brief** and may reference previously generated artifacts.
-- Notebooks must **communicate via files on disk**, not via shared kernel state.
-  - Assume a notebook can be run independently on a fresh kernel.
+1) **Student notebook (final material)**
+- File name: `lesson_{NN}.ipynb`
+- This is the complete, polished version that can be shared with students before or at the end of the lesson.
+
+2) **Live coding notebook**
+- File name: `lesson_{NN}_live_coding.ipynb`
+- It must be **structurally identical** to the student notebook (same section headings 0–10, same narrative flow), but it contains **intentional gaps** (empty cells / TODO blocks) where instructors will live-code highlights and key lines.
+
+Hard rule:
+- Whenever a notebook is created, edited, or updated for a lesson, **update both** the student notebook and the corresponding live-coding notebook.
+- Keep shared parts aligned (Title cell, imports, constants, paths, artifact conventions), while allowing live-coding cells to be partially empty.
+
+## Artifact-based communication (MUST)
+
+Notebooks must **communicate via files on disk**, not via shared kernel state.
+
+Rules:
+- Assume any notebook can be run independently on a fresh kernel.
 - In **Section 2 (Setup)** each notebook must clearly define:
   - `SEED` (when stochastic steps exist)
   - project paths using `pathlib.Path`
