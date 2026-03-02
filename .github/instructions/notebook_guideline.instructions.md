@@ -344,6 +344,9 @@ Centralize evaluation logic in `src/metrics.py`:
 # Data & ethics (MUST)
 
 - Never invent dataset columns. Inspect and adapt to actual schema.
+- Once you get output of the cells runs, adjust the markdown in order to comment on the actual data and results, not hypothetical ones.
+- It's important that we have more materials and maybe we decide to cut something during live lesson, rather than having less material and don't have anything to do
+- When writing markdowns, do not assume the reader is the teacher. So avoid "nota per lo studente", because these materials will be shared with students and they should be self-contained and so only impersonal language should be used.
 - Avoid including any sensitive personal data in examples.
 - When discussing financial impacts:
   - mention costs of false positives/false negatives
