@@ -52,6 +52,8 @@ Both notebooks must:
 - Do not invent dataset columns.
 - Adapt commentary to actual outputs.
 - Avoid teacher-directed phrasing.
+- Course syllabus is in syllabus/README.md and is the source of truth for lesson scope
+- When generating lesson material, ensure content does not anticipate future lessons beyond brief pointers
 
 ---
 
