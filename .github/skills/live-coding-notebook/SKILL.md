@@ -1,56 +1,81 @@
 # Skill: Create Live Coding Notebook
 
-This skill defines how to generate the live coding version 
-of any lesson notebook.
+This skill defines how to generate the live coding version of a lesson notebook.
 
 ---
 
-## Core Principle
+# Core Principle
 
-Live coding notebook must be structurally identical to the student notebook.
+The live coding notebook must be structurally identical to the student notebook.
 
 Same:
-- Headings
-- Section order
-- Setup
-- Imports
-- Artifact definitions
+
+- headings
+- section order
+- setup code
+- imports
+- artifact paths
+- reproducibility settings
+
+The pedagogical structure must remain intact.
 
 ---
 
-## Differences
+# Allowed Differences
 
-Replace selected logic blocks with TODO markers:
+Selected logic blocks must be replaced with TODO markers.
+
+Example:
 
 # TODO(LIVE): implement train/validation split
 # TODO(LIVE): build preprocessing pipeline
 # TODO(LIVE): compute ROC-AUC
 
-Guidelines:
+Rules:
 
-- Leave meaningful gaps (not trivial ones)
-- Keep structure complete
-- Do not remove sections
-- Do not change metadata
-- Do not change artifact logic
+- gaps must be meaningful
+- gaps must support live reasoning
+- do not create trivial TODO tasks
 
 ---
 
-## What Not To Do
+# TODO Design Constraints
 
-- Do not simplify structure
-- Do not remove sections
-- Do not alter naming conventions
-- Do not break reproducibility rules
+- Maximum 6 TODO(LIVE) blocks per notebook
+- Each TODO must be solvable in 2–5 minutes
+- TODO blocks must appear in key analytical steps
+
+Typical examples:
+
+- feature engineering step
+- train/test split
+- pipeline creation
+- model training
+- metric computation
 
 ---
 
-## Validation
+# Structural Preservation
 
-Before finalizing:
+The live notebook must preserve 70–85% of the original student notebook.
 
-- Same headings as student version
-- Same section order
-- Same SEED usage
-- Same artifact paths
-- Only logic cells partially removed
+Do NOT:
+
+- remove entire sections
+- alter headings
+- change metadata
+- change artifact paths
+
+Markdown interpretation cells must remain intact.
+
+---
+
+# Validation
+
+Before finalizing verify:
+
+- headings identical to student notebook
+- section order identical
+- SEED usage preserved
+- artifact paths unchanged
+- only selected logic cells replaced with TODO(LIVE)
