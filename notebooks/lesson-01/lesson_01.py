@@ -1,33 +1,77 @@
 # %% [markdown]
-# # Lezione 01 — Introduction to Machine Learning and the Churn Prediction Problem
+# # Machine Learning per l’Analisi Finanziaria
 #
-# ## Learning objectives
+# ## Lezione 01 — Il churn come problema di classificazione: formulazione e analisi esplorativa
 #
-# - Formalizzare il churn come problema di classificazione binaria.
-# - Comprendere il contesto di business di una banca retail.
-# - Ispezionare in modo rigoroso un dataset reale di clienti.
-# - Eseguire una EDA di base orientata alla modellazione futura.
-# - Identificare pattern e segnali preliminari associati al churn.
+# **Authors:**
+# - Enrico Huber
+# - Pietro Soglia
+#
+# **Emails:**
+# - enrico.huber@gmail.com
+# - pietro.soglia@gmail.com
+#
+# **Last updated:** 2026-03-05
+#
+# ## Obiettivi di apprendimento
+#
+# - Tradurre un problema di business (churn) in un problema di classificazione binaria.
+# - Identificare target e feature, distinguendo variabili predittive da identificativi.
+# - Condurre un’EDA essenziale: target, statistiche descrittive, sbilanciamento, prime ipotesi.
+# - Riconoscere variabili non predittive che si comportano come rumore casuale.
+# - Riconoscere segnali di **data leakage** e variabili “proxy” del target.
+# - Formulare ipotesi su quali variabili possano essere predittive del churn, basandosi su evidenze quantitative.
+
+# %% [markdown]
+# ## Outline
+#
+# - Caricamento dati e contratto del dataset
+# - Definire il target e quantificare lo sbilanciamento
+# - Qualità del dato: tipi, range, controlli rapidi
+# - Feature numeriche: distribuzioni e differenze tra classi
+# - Variabili a basso potere predittivo (Rumore statistico)
+# - Feature categoriche: churn rate per gruppi
+# - Segmentazioni e interazioni: pattern di churn per gruppi e fasce
+# - Attenzione al leakage: il caso `Complain`
+# - Riepilogo
+
+# %% [markdown]
+# ## Nota su GenAI e Code Assistants (pratica)
+#
+# In questo laboratorio useremo strumenti di assistenza al codice per:
+# - accelerare operazioni ripetitive (EDA standard, plotting);
+# - migliorare la leggibilità (refactoring, typing, docstring);
+# - ridurre errori “meccanici” (es. pipeline sklearn).
+#
+# Buone pratiche:
+# - specificare sempre obiettivo, vincoli (no leakage) e formato desiderato;
+# - chiedere esplicitamente *cosa stampare/visualizzare* per verificare i risultati;
+# - verificare sempre l’output con calcoli riproducibili (seed fissato).
 
 # %% [markdown]
 # ## Setup
 #
-# In questo blocco impostiamo dipendenze, percorsi di progetto e cartelle
-# di output. Usiamo `pathlib` per garantire portabilità e separiamo gli
-# artefatti in `outputs/`.
+# Definiamo dipendenze, percorsi e cartelle di output.
 
 # %%
 from __future__ import annotations
 
-from pathlib import Path
-import json
 import random
+from pathlib import Path
 from zipfile import ZipFile
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+
+try:
+    from IPython.display import display  # type: ignore
+except Exception:  # pragma: no cover
+
+    def display(x):  # type: ignore
+        print(x)
+
 
 SEED = 42
 np.random.seed(SEED)
@@ -36,8 +80,10 @@ random.seed(SEED)
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.float_format", "{:.2f}".format)
 
+
 def resolve_project_root() -> Path:
-    """Resolve repository root regardless of the current working directory."""
+    """Risolve la root del repository indipendentemente dalla cwd."""
+
     start_points = [Path.cwd().resolve()]
     if "__file__" in globals():
         start_points.append(Path(__file__).resolve().parent)
@@ -56,600 +102,461 @@ def resolve_project_root() -> Path:
 
 
 ROOT = resolve_project_root()
-
 DATA_ARCHIVE_PATH = ROOT / "data" / "archive.zip"
 OUTPUTS_DIR = ROOT / "outputs"
 FIGURES_DIR = OUTPUTS_DIR / "figures"
-CONFIG_DIR = OUTPUTS_DIR / "config"
-MODELS_DIR = OUTPUTS_DIR / "models"
-PREDICTIONS_DIR = OUTPUTS_DIR / "predictions"
-SUBMISSIONS_DIR = OUTPUTS_DIR / "submissions"
 
-for directory in [
-    OUTPUTS_DIR,
-    FIGURES_DIR,
-    CONFIG_DIR,
-    MODELS_DIR,
-    PREDICTIONS_DIR,
-    SUBMISSIONS_DIR,
-]:
-    directory.mkdir(parents=True, exist_ok=True)
+for _dir in [OUTPUTS_DIR, FIGURES_DIR]:
+    _dir.mkdir(parents=True, exist_ok=True)
 
 sns.set_theme(style="whitegrid", context="notebook")
 
 
 def save_current_figure(filename: str) -> None:
-    """Save the current matplotlib figure into outputs/figures."""
+    """Salva la figura corrente in outputs/figures/."""
+
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / filename, dpi=120, bbox_inches="tight")
 
 
 def load_dataset_from_archive(
     archive_path: Path,
-    filename_patterns: tuple[str, ...] = (
-        "train",
-        "test",
-        "churn",
-        "customer",
-        "record",
-        "label",
-    ),
+    filename_patterns: tuple[str, ...] = ("train", "test", "churn", "customer"),
 ) -> pd.DataFrame:
-    """Load the most suitable churn CSV from a ZIP archive using schema checks."""
+    """Carica il CSV principale dall'archivio ZIP validando lo schema.
+
+    La funzione:
+    - controlla che l'archivio esista;
+    - lista i membri;
+    - sceglie il primo CSV compatibile con i pattern;
+    - legge il CSV direttamente dallo ZIP.
+    """
+
     if not archive_path.exists():
         raise FileNotFoundError(f"Archivio dati non trovato: {archive_path}")
 
-    expected_columns = {
-        "creditscore",
-        "geography",
-        "gender",
-        "age",
-        "tenure",
-        "balance",
-        "numofproducts",
-        "hascrcard",
-        "isactivemember",
-        "estimatedsalary",
-    }
-    target_candidates = {"exited", "churn", "target", "label"}
-
-    with ZipFile(archive_path) as zip_file:
-        members = [member for member in zip_file.namelist() if not member.endswith("/")]
+    with ZipFile(archive_path) as zf:
+        members = [m for m in zf.namelist() if not m.endswith("/")]
         print("Membri archivio:")
-        for member in members:
-            print(f"- {member}")
+        for m in members:
+            print(f"  - {m}")
 
-        csv_members = [member for member in members if member.lower().endswith(".csv")]
-        if not csv_members:
-            raise ValueError(
-                "Nessun file CSV trovato nell'archivio. "
-                f"Membri disponibili: {members}"
-            )
-
-        pattern_matches = [
-            member
-            for member in csv_members
-            if any(pattern in member.lower() for pattern in filename_patterns)
+        candidates = [
+            m
+            for m in members
+            if any(p in m.lower() for p in filename_patterns) and m.endswith(".csv")
         ]
-        candidates = pattern_matches if pattern_matches else csv_members
-
-        best_member: str | None = None
-        best_score = -1
-
-        for member in candidates:
-            with zip_file.open(member) as file_obj:
-                preview_df = pd.read_csv(file_obj, nrows=200)
-
-            normalized_columns = {col.strip().lower() for col in preview_df.columns}
-            schema_score = len(expected_columns.intersection(normalized_columns))
-            has_target = bool(target_candidates.intersection(normalized_columns))
-            total_score = schema_score + (3 if has_target else 0)
-
-            if has_target and total_score > best_score:
-                best_member = member
-                best_score = total_score
-
-        if best_member is None:
-            raise ValueError(
-                "Nessun CSV adatto trovato nell'archivio dopo validazione schema. "
-                f"CSV candidati: {candidates}. "
-                "Attese colonne simili a feature churn e una colonna target "
-                "(Exited/Churn/Target/Label)."
+        if not candidates:
+            raise FileNotFoundError(
+                "Nessun CSV trovato nell'archivio con i pattern "
+                f"{filename_patterns}. Membri disponibili: {members}"
             )
 
-        print(f"CSV selezionato: {best_member}")
-        with zip_file.open(best_member) as file_obj:
-            return pd.read_csv(file_obj)
+        chosen = candidates[0]
+        print(f"\nFile selezionato: {chosen}")
 
+        with zf.open(chosen) as f:
+            return pd.read_csv(f)
 
-print(f"Dataset archive path: {DATA_ARCHIVE_PATH}")
-print(f"Figure directory: {FIGURES_DIR}")
 
 # %% [markdown]
-# Le cartelle di output sono disponibili e il setup è deterministico
-# (`SEED = 42`). Questo rende la lezione riproducibile e pronta alla
-# produzione di artefatti (grafici e file di sintesi).
-
-# %% [markdown]
-# ## Introduction to churn prediction
+# ## Caricamento dati e contratto del dataset
 #
-# Prima di leggere i dati, esplicitiamo il problema: prevedere se un
-# cliente uscirà dalla banca (`Exited = 1`) oppure resterà (`Exited = 0`).
-
-# %%
-problem_definition = pd.DataFrame(
-    {
-        "elemento": ["unità statistica", "target", "tipo problema", "orizzonte"],
-        "definizione": [
-            "cliente bancario",
-            "Exited (0 = resta, 1 = abbandona)",
-            "classificazione binaria supervisionata",
-            "decisioni di retention nel breve periodo",
-        ],
-    }
-)
-problem_definition
-
-# %% [markdown]
-# La formulazione collega chiaramente osservazione, target e obiettivo
-# analitico. Il problema è supervisionato e binario: nella lezione corrente
-# ci concentriamo su qualità dati e segnali esplorativi, senza ancora
-# costruire modelli predittivi.
-
-# %% [markdown]
-# ## Business framing of churn
-#
-# Quantifichiamo un esempio semplice di costo atteso del churn per rendere
-# operativo il legame tra metrica statistica e impatto economico.
-
-# %%
-business_frame = pd.DataFrame(
-    {
-        "voce": [
-            "clienti totali",
-            "valore medio annuo per cliente (€)",
-            "costo retention per cliente a rischio (€)",
-        ],
-        "valore": [10000, 1200, 120],
-    }
-)
-
-base_churn_rate = 0.2038
-expected_lost_value = int(10000 * base_churn_rate * 1200)
-retention_budget = int(10000 * base_churn_rate * 120)
-
-business_frame, expected_lost_value, retention_budget
-
-# %% [markdown]
-# Con un tasso di churn di riferimento pari a circa 20.38%, il valore annuo
-# potenzialmente perso è nell'ordine di €2.445.600, mentre un budget di
-# retention uniforme sarebbe circa €244.560. Questo giustifica analisi
-# granulari per concentrare gli interventi sui segmenti più a rischio.
-
-# %% [markdown]
-# ## Dataset overview
-#
-# Carichiamo il dataset e produciamo una prima scheda tecnica con forma,
-# tipi e qualità generale.
+# Iniziamo validando il “contratto” del dataset: dove si trova, quali colonne contiene,
+# che tipi di variabili abbiamo e quale colonna può essere il target.
 
 # %%
 df = load_dataset_from_archive(DATA_ARCHIVE_PATH)
 
-dataset_overview = {
-    "n_righe": int(df.shape[0]),
-    "n_colonne": int(df.shape[1]),
-    "target": "Exited",
-    "missing_values_totali": int(df.isna().sum().sum()),
-}
+print("\nShape:", df.shape)
+display(df.head())
 
-pd.Series(dataset_overview)
+print("\nDtypes:")
+display(df.dtypes)
 
-# %% [markdown]
-# Il dataset contiene 10.000 osservazioni e 18 variabili, con target
-# `Exited` e nessun valore mancante. La dimensione è adeguata per una prima
-# EDA robusta e per confronti segmentati su più sottogruppi.
+print("\nDescrittive (numeriche):")
+display(df.describe(include=[np.number]).T)
 
 # %% [markdown]
-# ## Data loading
+# - Il dataset contiene **10,000 righe** e **18 colonne**.
+# - La colonna `Exited` è un candidato naturale per il target: è binaria (0/1) e coerente con l’idea di churn.
+# - Sono presenti anche colonne identificative (`RowNumber`, `CustomerId`, `Surname`) che non dovrebbero essere usate per “prevedere”, ma possono servire per controlli e join (se esistessero altre tabelle).
+
+# %% [markdown]
+# ## Definire il target e quantificare lo sbilanciamento
 #
-# Salviamo una copia raw del dataset negli artefatti del progetto per
-# preservare tracciabilità e riproducibilità.
+# In problemi di churn è tipico che la classe positiva (chi abbandona) sia minoritaria.
+# Quantifichiamo quindi la prevalenza di `Exited=1`.
 
 # %%
-raw_copy_path = OUTPUTS_DIR / "data" / "lesson_01_raw.csv"
-df.to_csv(raw_copy_path, index=False)
-raw_copy_path
+TARGET = "Exited"
 
-# %% [markdown]
-# La copia raw è stata salvata in `outputs/data/lesson_01_raw.csv`. Questo
-# separa in modo esplicito il dato sorgente dai passaggi di analisi e riduce
-# il rischio di sovrascrivere accidentalmente il file originale.
+target_counts = df[TARGET].value_counts().sort_index()
+target_rates = df[TARGET].value_counts(normalize=True).sort_index()
 
-# %% [markdown]
-# ## First data inspection
-#
-# Ispezioniamo colonne, tipi e un campione di record per valutare la natura
-# delle variabili disponibili.
+print("Target counts:\n", target_counts)
+print("\nTarget rates:\n", target_rates)
 
-# %%
-inspection_table = pd.DataFrame(
-    {
-        "dtype": df.dtypes.astype(str),
-        "n_unique": df.nunique(),
-        "missing": df.isna().sum(),
-    }
-).sort_values("dtype")
-
-inspection_table.head(18)
-
-# %% [markdown]
-# Le variabili miste numeriche/categoriche sono coerenti con un problema di
-# churn retail. `Geography`, `Gender` e `Card Type` risultano categoriche;
-# `Age`, `Balance`, `CreditScore` e `EstimatedSalary` sono quantitative e
-# candidati naturali per analisi di relazione con il target.
-
-# %% [markdown]
-# ## Basic exploratory analysis
-#
-# Partiamo dalle statistiche descrittive numeriche per valutare ordini di
-# grandezza, dispersione e possibili asimmetrie.
-
-# %%
-numeric_cols = [
-    "CreditScore",
-    "Age",
-    "Tenure",
-    "Balance",
-    "NumOfProducts",
-    "EstimatedSalary",
-    "Satisfaction Score",
-    "Point Earned",
-]
-
-desc = df[numeric_cols].describe().T
-
-desc
-
-# %% [markdown]
-# Si osserva una forte eterogeneità di scala: `Balance` ha mediana
-# ~97.199 e massimo ~250.898, mentre `Tenure` è compresa tra 0 e 10.
-# L'età ha mediana 37 anni (IQR circa 12), suggerendo una popolazione
-# prevalentemente adulta ma con coda fino a 92 anni.
-
-# %% [markdown]
-# Analizziamo la distribuzione dell'età e differenziamo per stato di churn.
-
-# %%
-fig, axes = plt.subplots(1, 2, figsize=(13, 4))
-sns.histplot(data=df, x="Age", bins=30, kde=True, ax=axes[0], color="#4C72B0")
-axes[0].set_title("Distribuzione di Age")
-axes[0].set_xlabel("Età")
-axes[0].set_ylabel("Frequenza")
-
-sns.boxplot(data=df, x="Exited", y="Age", ax=axes[1])
-axes[1].set_title("Age per classe di Exited")
-axes[1].set_xlabel("Exited")
-axes[1].set_ylabel("Età")
-
-save_current_figure("lesson_01_age_distribution.png")
-plt.show()
-
-# %% [markdown]
-# La mediana dell'età passa da circa 36 anni (`Exited=0`) a 45 anni
-# (`Exited=1`), con differenza di 9 anni. Il segnale è consistente e indica
-# che l'età potrebbe contribuire in modo rilevante alla separazione delle
-# classi in una fase modellistica successiva.
-
-# %% [markdown]
-# Verifichiamo ora il comportamento del `CreditScore` rispetto al churn.
-
-# %%
-fig, axes = plt.subplots(1, 2, figsize=(13, 4))
-sns.histplot(
-    data=df, x="CreditScore", bins=30, kde=True, ax=axes[0], color="#55A868"
-)
-axes[0].set_title("Distribuzione di CreditScore")
-axes[0].set_xlabel("CreditScore")
-axes[0].set_ylabel("Frequenza")
-
-sns.boxplot(data=df, x="Exited", y="CreditScore", ax=axes[1])
-axes[1].set_title("CreditScore per classe di Exited")
-axes[1].set_xlabel("Exited")
-axes[1].set_ylabel("CreditScore")
-
-save_current_figure("lesson_01_creditscore_distribution.png")
-plt.show()
-
-# %% [markdown]
-# L'effetto è più debole rispetto all'età: la mediana scende da circa 653
-# (`Exited=0`) a 646 (`Exited=1`), differenza di 7 punti. Il `CreditScore`
-# da solo non sembra discriminante forte, ma può aggiungere informazione in
-# combinazione con altre variabili.
-
-# %% [markdown]
-# Confrontiamo i tassi di churn per geografia, genere e numero di prodotti.
-
-# %%
-churn_by_geography = (
-    df.groupby("Geography", as_index=False)["Exited"].mean()
-    .assign(churn_rate_pct=lambda x: x["Exited"] * 100)
-    .sort_values("churn_rate_pct", ascending=False)
-)
-
-churn_by_gender = (
-    df.groupby("Gender", as_index=False)["Exited"].mean()
-    .assign(churn_rate_pct=lambda x: x["Exited"] * 100)
-    .sort_values("churn_rate_pct", ascending=False)
-)
-
-churn_by_products = (
-    df.groupby("NumOfProducts", as_index=False)["Exited"].mean()
-    .assign(churn_rate_pct=lambda x: x["Exited"] * 100)
-    .sort_values("NumOfProducts")
-)
-
-fig, axes = plt.subplots(1, 3, figsize=(16, 4))
-sns.barplot(data=churn_by_geography, x="Geography", y="churn_rate_pct", ax=axes[0])
-axes[0].set_title("Churn (%) per Geography")
-axes[0].set_xlabel("Geography")
-axes[0].set_ylabel("Churn rate (%)")
-
-sns.barplot(data=churn_by_gender, x="Gender", y="churn_rate_pct", ax=axes[1])
-axes[1].set_title("Churn (%) per Gender")
-axes[1].set_xlabel("Gender")
-axes[1].set_ylabel("Churn rate (%)")
-
-sns.barplot(data=churn_by_products, x="NumOfProducts", y="churn_rate_pct", ax=axes[2])
-axes[2].set_title("Churn (%) per NumOfProducts")
-axes[2].set_xlabel("Numero prodotti")
-axes[2].set_ylabel("Churn rate (%)")
-
-save_current_figure("lesson_01_grouped_churn_basic.png")
-plt.show()
-
-churn_by_geography, churn_by_gender, churn_by_products
-
-# %% [markdown]
-# Emergono differenze marcate: Germania ~32.44% contro Francia ~16.17% e
-# Spagna ~16.67%; donne ~25.07% contro uomini ~16.47%. Sul numero prodotti,
-# il tasso è ~27.71% con 1 prodotto, ~7.60% con 2 prodotti, e cresce in modo
-# estremo oltre 2 prodotti (segmenti però piccoli e da verificare in seguito).
-
-# %% [markdown]
-# Analizziamo la relazione tra attività cliente, reclami e churn.
-
-# %%
-churn_by_activity = (
-    df.groupby("IsActiveMember", as_index=False)["Exited"].mean()
-    .assign(churn_rate_pct=lambda x: x["Exited"] * 100)
-)
-
-churn_by_complain = (
-    df.groupby("Complain", as_index=False)["Exited"].mean()
-    .assign(churn_rate_pct=lambda x: x["Exited"] * 100)
-)
-
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-sns.barplot(data=churn_by_activity, x="IsActiveMember", y="churn_rate_pct", ax=axes[0])
-axes[0].set_title("Churn (%) per IsActiveMember")
-axes[0].set_xlabel("IsActiveMember")
-axes[0].set_ylabel("Churn rate (%)")
-
-sns.barplot(data=churn_by_complain, x="Complain", y="churn_rate_pct", ax=axes[1])
-axes[1].set_title("Churn (%) per Complain")
-axes[1].set_xlabel("Complain")
-axes[1].set_ylabel("Churn rate (%)")
-
-save_current_figure("lesson_01_activity_complain_churn.png")
-plt.show()
-
-churn_by_activity, churn_by_complain
-
-# %% [markdown]
-# I clienti non attivi hanno churn ~26.87% contro ~14.27% degli attivi
-# (gap ~12.6 punti). La variabile `Complain` mostra invece un pattern quasi
-# deterministico: ~99.51% di churn quando `Complain=1` contro ~0.05% quando
-# `Complain=0`, segnale molto forte da trattare con attenzione per possibili
-# effetti temporali o leakage informativo.
-
-# %% [markdown]
-# Esploriamo `Balance` con due prospettive: distribuzione e tasso di churn
-# tra saldo nullo e positivo.
-
-# %%
-fig, axes = plt.subplots(1, 2, figsize=(13, 4))
-sns.histplot(data=df, x="Balance", bins=35, kde=True, ax=axes[0], color="#C44E52")
-axes[0].set_title("Distribuzione di Balance")
-axes[0].set_xlabel("Balance")
-axes[0].set_ylabel("Frequenza")
-
-sns.boxplot(data=df, x="Exited", y="Balance", ax=axes[1])
-axes[1].set_title("Balance per classe di Exited")
-axes[1].set_xlabel("Exited")
-axes[1].set_ylabel("Balance")
-
-save_current_figure("lesson_01_balance_distribution.png")
-plt.show()
-
-zero_balance_share = (df["Balance"] == 0).mean() * 100
-churn_zero_balance = df.loc[df["Balance"] == 0, "Exited"].mean() * 100
-churn_pos_balance = df.loc[df["Balance"] > 0, "Exited"].mean() * 100
-
-zero_balance_share, churn_zero_balance, churn_pos_balance
-
-# %% [markdown]
-# Circa il 36.17% dei clienti ha `Balance=0`. In questo gruppo il churn è
-# ~13.82%, mentre supera il 24.10% tra chi ha saldo positivo. La relazione
-# suggerisce che la sola presenza di saldo non coincide con maggiore fedeltà,
-# ma potrebbe riflettere segmenti con diversa dinamica di utilizzo del conto.
-
-# %% [markdown]
-# ## Target variable exploration
-#
-# Misuriamo prima distribuzione del target, poi relazioni numeriche globali.
-
-# %%
-fig, ax = plt.subplots(figsize=(6, 4))
-sns.countplot(data=df, x="Exited", ax=ax)
-ax.set_title("Distribuzione del target Exited")
+plt.figure(figsize=(5, 3))
+ax = sns.barplot(x=target_counts.index.astype(str), y=target_counts.values)
+ax.set_title("Distribuzione del target (Exited)")
 ax.set_xlabel("Exited")
 ax.set_ylabel("Numero clienti")
-save_current_figure("lesson_01_target_count.png")
+
+save_current_figure("lesson_01_target_distribution.png")
 plt.show()
 
-target_dist = df["Exited"].value_counts().sort_index()
-target_pct = (df["Exited"].value_counts(normalize=True).sort_index() * 100).round(2)
-target_dist, target_pct
+# %% [markdown]
+# - `Exited=1` (churn) vale **2,038 / 10,000 = 20.38%**: la classe positiva è minoritaria ma non estremamente rara.
+# - `Exited=0` vale **7,962 / 10,000 = 79.62%**.
+# - Lo sbilanciamento suggerisce di usare metriche robuste (es. ROC-AUC) e split stratificati.
 
 # %% [markdown]
-# Il target è sbilanciato ma non estremo: classe 0 pari a 7.962 casi
-# (79.62%) e classe 1 pari a 2.038 casi (20.38%). Questo livello di
-# imbalance va monitorato nelle fasi successive, soprattutto nella scelta
-# delle metriche di valutazione.
-
-# %% [markdown]
-# Studiamo la correlazione lineare tra variabili numeriche e target.
+# ## Qualità del dato: tipi, range, controlli rapidi
+#
+# Prima di qualsiasi modello, controlliamo: valori mancanti, duplicati, e la presenza di colonne “sospette”
+# (es. variabili che potrebbero essere note solo dopo l’evento di churn).
 
 # %%
-corr_cols = numeric_cols + ["Exited"]
-corr_matrix = df[corr_cols].corr(numeric_only=True)
+missing_rate = df.isna().mean().sort_values(ascending=False)
+duplicated_rows = df.duplicated().sum()
+duplicated_customer_id = (
+    df["CustomerId"].duplicated().sum() if "CustomerId" in df.columns else None
+)
 
-fig, ax = plt.subplots(figsize=(9, 6))
-sns.heatmap(corr_matrix, cmap="coolwarm", center=0, annot=True, fmt=".2f", ax=ax)
-ax.set_title("Matrice di correlazione (feature numeriche + target)")
-save_current_figure("lesson_01_correlation_heatmap.png")
+print("Duplicated rows:", duplicated_rows)
+print("Duplicated CustomerId:", duplicated_customer_id)
+
+print("\nTop missing (dovrebbe essere tutto 0):")
+display(missing_rate.head(12))
+
+id_cols = [c for c in ["RowNumber", "CustomerId", "Surname"] if c in df.columns]
+print("\nColonne identificative candidate:", id_cols)
+
+# %% [markdown]
+# - Non risultano valori mancanti: il tasso di missing è **0** per tutte le colonne.
+# - Non risultano righe duplicate (duplicati = **0**).
+# - `CustomerId` è un identificativo: anche se unico, non è informazione “causale” e in genere va escluso dal modeling.
+
+# %% [markdown]
+# ## Feature numeriche: distribuzioni e differenze tra classi
+#
+# Confrontiamo alcune feature numeriche tra `Exited=0` e `Exited=1`.
+# L’obiettivo non è “dimostrare causalità”, ma generare ipotesi utili per la modellazione.
+
+# %%
+num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+num_cols = [c for c in num_cols if c != TARGET]
+
+age_quantiles = df.groupby(TARGET)["Age"].quantile([0.25, 0.5, 0.75]).unstack()
+
+balance_zero_share = (df["Balance"] == 0).mean()
+churn_rate_balance_zero = df.loc[df["Balance"] == 0, TARGET].mean()
+churn_rate_balance_positive = df.loc[df["Balance"] > 0, TARGET].mean()
+
+print("Age quantiles by target:\n", age_quantiles)
+print("\nShare Balance==0:", balance_zero_share)
+print("Churn rate Balance==0:", churn_rate_balance_zero)
+print("Churn rate Balance>0:", churn_rate_balance_positive)
+
+plt.figure(figsize=(6, 3.5))
+ax = sns.boxplot(data=df, x=TARGET, y="Age")
+ax.set_title("Età per classe (Exited)")
+ax.set_xlabel("Exited")
+ax.set_ylabel("Age")
+
+save_current_figure("lesson_01_age_by_target.png")
 plt.show()
 
-corr_with_target = corr_matrix["Exited"].sort_values(ascending=False)
-corr_with_target
+plt.figure(figsize=(6, 3.5))
+ax = sns.boxplot(data=df, x=TARGET, y="Balance")
+ax.set_title("Balance per classe (Exited)")
+ax.set_xlabel("Exited")
+ax.set_ylabel("Balance")
 
-# %% [markdown]
-# La correlazione più alta con `Exited` è `Age` (~0.29), seguita da
-# `Balance` (~0.12); le altre sono vicine a zero in valore assoluto.
-# Questo indica che il churn non è spiegabile da una singola relazione
-# lineare forte e richiederà combinazioni non banali di feature.
-
-# %% [markdown]
-# Prima prospettiva alternativa: tasso di churn per fasce di età.
-
-# %%
-age_bins = [17, 30, 40, 50, 60, 100]
-age_labels = ["18-30", "31-40", "41-50", "51-60", "61+"]
-df["age_group"] = pd.cut(df["Age"], bins=age_bins, labels=age_labels)
-
-churn_by_age_group = (
-    df.groupby("age_group", observed=False)["Exited"]
-    .mean()
-    .mul(100)
-    .reset_index(name="churn_rate_pct")
-)
-
-fig, ax = plt.subplots(figsize=(8, 4))
-sns.barplot(data=churn_by_age_group, x="age_group", y="churn_rate_pct", ax=ax)
-ax.set_title("Churn (%) per fascia di età")
-ax.set_xlabel("Fascia età")
-ax.set_ylabel("Churn rate (%)")
-save_current_figure("lesson_01_churn_by_age_group.png")
+save_current_figure("lesson_01_balance_by_target.png")
 plt.show()
 
-churn_by_age_group
+# %% [markdown]
+# - L’età è più alta nei clienti churn: la **mediana** passa da **36** (`Exited=0`) a **45** (`Exited=1`).
+# - La feature `Balance` ha un comportamento interessante: **36.17%** dei clienti ha `Balance==0`.
+# - Il churn rate per `Balance==0` è **13.82%**, mentre per `Balance>0` è **24.10%**: il saldo non nullo sembra associato a maggior churn (ipotesi da validare).
 
 # %% [markdown]
-# Il churn cresce con l'età fino alla fascia 51-60 (~56.21%), molto sopra
-# 18-30 (~7.52%) e 31-40 (~12.11%). La fascia 61+ scende a ~24.78%, segnale
-# di possibile non linearità che rende utile una segmentazione per classi
-# d'età nelle analisi successive.
-
-# %% [markdown]
-# Seconda prospettiva alternativa: combinazione `Geography` × attività.
+# ## Variabili a basso potere predittivo (Rumore statistico)
+#
+# Non tutte le feature raccolte offrono reale discriminazione rispetto al target. A volte, alcune variabili rappresentano puro “rumore” statistico, o sono generate in modo sostanzialmente uniforme e scorrelato dalla propensione al churn.
+#
+# Esaminiamo `EstimatedSalary` e `Satisfaction Score`.
 
 # %%
-risk_cube = (
-    df.groupby(["Geography", "IsActiveMember"])["Exited"]
-    .mean()
-    .mul(100)
-    .reset_index(name="churn_rate_pct")
-)
+salary_churn_rates = df.groupby(TARGET)["EstimatedSalary"].describe()
+print("Descrittive di EstimatedSalary divise per classe target:")
+display(salary_churn_rates)
 
-risk_pivot = risk_cube.pivot(
-    index="Geography", columns="IsActiveMember", values="churn_rate_pct"
-)
+# Calcoliamo il churn per punteggio di soddisfazione (1 a 5)
+if "Satisfaction Score" in df.columns:
+    sat_score_churn = (
+        df.groupby("Satisfaction Score")[TARGET]
+        .mean()
+        .rename("churn_rate")
+        .to_frame()
+        .join(df["Satisfaction Score"].value_counts().rename("n"))
+        .sort_index()
+    )
+    print("\nChurn rate per Satisfaction Score:")
+    display(sat_score_churn)
 
-fig, ax = plt.subplots(figsize=(7, 4))
-sns.heatmap(risk_pivot, annot=True, fmt=".2f", cmap="YlOrRd", ax=ax)
-ax.set_title("Churn (%) per Geography e IsActiveMember")
+plt.figure(figsize=(6, 3.5))
+ax = sns.histplot(
+    data=df,
+    x="EstimatedSalary",
+    hue=TARGET,
+    kde=True,
+    common_norm=False,
+    stat="density",
+)
+ax.set_title("Distribuzione Densità: EstimatedSalary per Classe")
+ax.set_xlabel("Salario Stimato")
+ax.set_ylabel("Densità")
+
+save_current_figure("lesson_01_salary_distribution.png")
+plt.show()
+
+# %% [markdown]
+# - `EstimatedSalary` è uniformemente distribuita su tutto il dominio (da ~€11 a ~€200,000) e la sua distribuzione è praticamente **identica** nelle due popolazioni (churn e non churn). Il salario stimato, da solo, non appare un buon predittore.
+# - Analogamente, il `Satisfaction Score` ha un churn rate che fluttua in modo del tutto casuale attorno al tasso medio del **20%** senza mostrare un trend monotono sensato. Variabili simili introducono unicamente rumore nei modelli e potrebbero richiedere logiche di binning o semplici scarti algoritmici.
+
+# %% [markdown]
+# ## Feature categoriche: churn rate per gruppi
+#
+# Alcune variabili descrivono gruppi (es. area geografica) e possono mostrare tassi di churn differenti.
+# Calcoliamo il churn rate per gruppo per `Geography`, `Gender` e `Card Type`.
+
+# %%
+from pandas.api.types import is_numeric_dtype
+
+cat_cols: list[str] = []
+for c in df.columns:
+    if c == TARGET:
+        continue
+    if c in {"RowNumber", "CustomerId", "Surname"}:
+        continue
+    if not is_numeric_dtype(df[c]):
+        cat_cols.append(c)
+
+print("Colonne categoriche candidate:", cat_cols)
+
+for c in ["Geography", "Gender", "Card Type"]:
+    if c in df.columns:
+        out = (
+            df.groupby(c)[TARGET]
+            .mean()
+            .rename("churn_rate")
+            .to_frame()
+            .join(df[c].value_counts().rename("n"))
+            .sort_values("churn_rate", ascending=False)
+        )
+        print(f"\n{c} (n, churn_rate):")
+        display(out)
+
+geo_rates = df.groupby("Geography")[TARGET].mean().sort_values(ascending=False)
+plt.figure(figsize=(6, 3))
+ax = sns.barplot(x=geo_rates.index, y=geo_rates.values)
+ax.set_title("Churn rate per Geography")
+ax.set_xlabel("Geography")
+ax.set_ylabel("Churn rate")
+
+save_current_figure("lesson_01_churn_rate_by_geography.png")
+plt.show()
+
+# %% [markdown]
+# - Il churn rate varia per gruppo: ad esempio **Germany = 32.44%** (n=2,509) è più alto di **France = 16.17%** (n=5,014) e **Spain = 16.67%** (n=2,477).
+# - Anche `Gender` mostra differenze: **Female = 25.07%** (n=4,543) vs **Male = 16.47%** (n=5,457).
+# - Queste differenze possono riflettere pattern reali, ma anche variabili confondenti: è utile modellare e poi interpretare con cautela.
+
+# %% [markdown]
+# ## Segmentazioni e interazioni: pattern di churn per gruppi e fasce
+#
+# Estendiamo l’EDA con analisi tipiche da data scientist:
+# - variabili binarie (engagement/attività);
+# - segmentazioni per fasce (es. età);
+# - interazioni tra gruppi (es. `Geography × Gender`).
+
+# %% [markdown]
+# ### Feature binarie: attività e carta di credito
+#
+# Calcoliamo churn rate e numerosità per `IsActiveMember` e `HasCrCard`.
+
+# %%
+for c in ["IsActiveMember", "HasCrCard"]:
+    out = (
+        df.groupby(c)[TARGET]
+        .mean()
+        .rename("churn_rate")
+        .to_frame()
+        .join(df[c].value_counts().rename("n"))
+        .sort_index()
+    )
+    print(f"\n{c} (n, churn_rate):")
+    display(out)
+
+active_rates = df.groupby("IsActiveMember")[TARGET].mean().sort_index()
+plt.figure(figsize=(5, 3))
+ax = sns.barplot(x=active_rates.index.astype(str), y=active_rates.values)
+ax.set_title("Churn rate per IsActiveMember")
 ax.set_xlabel("IsActiveMember")
-ax.set_ylabel("Geography")
-save_current_figure("lesson_01_churn_geo_active_heatmap.png")
+ax.set_ylabel("Churn rate")
+
+save_current_figure("lesson_01_churn_rate_by_is_active.png")
 plt.show()
 
-risk_pivot
+# %% [markdown]
+# - `IsActiveMember=0` ha churn rate **26.87%** (n=4,849), mentre `IsActiveMember=1` ha churn rate **14.27%** (n=5,151): la differenza è ampia e coerente con l’idea che l’inattività sia un segnale di rischio.
+# - `HasCrCard` mostra invece un effetto molto più debole: **20.81%** per `HasCrCard=0` (n=2,945) vs **20.20%** per `HasCrCard=1` (n=7,055).
 
 # %% [markdown]
-# La combinazione mostra il segmento più critico in Germania e non attivo,
-# mentre i gruppi attivi in Francia e Spagna risultano più stabili. Questo
-# conferma che variabili comportamentali (`IsActiveMember`) e contesto
-# geografico vanno lette congiuntamente, non in modo isolato.
-
-# %% [markdown]
-# ## Domande guidate
+# ### Numero di prodotti: non-linearità e cautela sui piccoli gruppi
 #
-# **1) Qual è il livello di imbalance del target?**
-#
-# La classe `Exited=1` pesa circa il 20.38% (2.038 su 10.000), mentre
-# `Exited=0` pesa il 79.62%.
-#
-# **2) Quale differenza geografica emerge con maggiore intensità?**
-#
-# La Germania ha churn ~32.44%, circa il doppio rispetto a Francia (~16.17%)
-# e Spagna (~16.67%).
-#
-# **3) Quale segnale comportamentale è più informativo?**
-#
-# `IsActiveMember` mostra un gap di ~12.6 punti (26.87% vs 14.27%);
-# `Complain` è quasi deterministico (~99.51% vs ~0.05%).
-#
-# **4) Che ruolo ha l'età nel rischio di uscita?**
-#
-# Il churn cresce con l'età fino a 51-60 anni (~56.21%) e poi si riduce nella
-# fascia 61+ (~24.78%), indicando una relazione non lineare.
-#
-# **5) Quale implicazione operativa emerge dal saldo (`Balance`)?**
-#
-# I clienti con `Balance=0` hanno churn più basso (~13.82%) rispetto a chi ha
-# saldo positivo (~24.10%), quindi la sola liquidità sul conto non è una
-# garanzia di fedeltà.
-
-# %% [markdown]
-# ## Summary
-#
-# - Il dataset è completo (10.000 × 18) e senza missing values.
-# - Il churn medio è ~20.38%, con sbilanciamento moderato della classe target.
-# - Segnali forti: età, attività del cliente, geografia e reclami.
-# - Segnali deboli isolati: credit score e molte variabili numeriche lineari.
-# - Le analisi bivariate mostrano pattern utili per impostare il lavoro
-#   successivo su preprocessing e modellazione, senza anticipare ancora
-#   la costruzione dei modelli.
+# `NumOfProducts` può catturare sia engagement sia complessità del rapporto.
+# Verifichiamo churn rate per numero di prodotti, tenendo presente la dimensione dei gruppi.
 
 # %%
-summary_payload = {
-    "lesson": "01",
-    "topic": "Introduction to Machine Learning and the Churn Prediction Problem",
-    "rows": int(df.shape[0]),
-    "cols": int(df.shape[1]),
-    "target_rate_exited_pct": float((df["Exited"].mean() * 100).round(2)),
-    "missing_total": int(df.isna().sum().sum()),
-    "top_correlations_with_target": {
-        key: float(round(value, 4))
-        for key, value in corr_with_target.to_dict().items()
-    },
-}
+num_products = (
+    df.groupby("NumOfProducts")[TARGET]
+    .mean()
+    .rename("churn_rate")
+    .to_frame()
+    .join(df["NumOfProducts"].value_counts().rename("n"))
+    .sort_index()
+)
+display(num_products)
 
-summary_path = CONFIG_DIR / "lesson_01_eda_summary.json"
-summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
-summary_path
+plt.figure(figsize=(6, 3))
+ax = sns.barplot(
+    x=num_products.index.astype(str),
+    y=num_products["churn_rate"].values,
+)
+ax.set_title("Churn rate per NumOfProducts")
+ax.set_xlabel("NumOfProducts")
+ax.set_ylabel("Churn rate")
+
+save_current_figure("lesson_01_churn_rate_by_num_products.png")
+plt.show()
 
 # %% [markdown]
-# Il file di sintesi è stato salvato in `outputs/config/lesson_01_eda_summary.json`.
-# In questo modo, i risultati principali della lezione restano riutilizzabili
-# anche fuori dal notebook (reporting, dashboard o confronto tra iterazioni).
+# - Il pattern è fortemente non lineare: `NumOfProducts=2` ha churn rate **7.60%** (n=4,590), molto più basso di `NumOfProducts=1` (**27.71%**, n=5,084).
+# - I gruppi `NumOfProducts=3` (**82.71%**, n=266) e `NumOfProducts=4` (**100%**, n=60) sono estremi ma anche molto piccoli: è essenziale interpretare questi numeri con cautela (varianza alta) e verificare se esiste una spiegazione di business o di quality.
+
+# %% [markdown]
+# ### Segmentazione per fasce d’età
+#
+# L’età mostrava già differenze nella boxplot. Ora costruiamo fasce (bin) e calcoliamo il churn rate per ciascuna fascia.
+
+# %%
+age_bins = pd.cut(df["Age"], bins=[17, 25, 35, 45, 55, 65, 100], right=True)
+age_out = (
+    df.groupby(age_bins, observed=True)[TARGET]
+    .agg(["mean", "count"])
+    .rename(columns={"mean": "churn_rate", "count": "n"})
+)
+display(age_out)
+
+plt.figure(figsize=(7, 3))
+ax = sns.barplot(x=age_out.index.astype(str), y=age_out["churn_rate"].values)
+ax.set_title("Churn rate per fasce di età")
+ax.set_xlabel("Fascia di età")
+ax.set_ylabel("Churn rate")
+ax.tick_params(axis="x", rotation=20)
+
+save_current_figure("lesson_01_churn_rate_by_age_bins.png")
+plt.show()
+
+# %% [markdown]
+# - Il churn aumenta nettamente passando alle fasce centrali: la fascia **(25, 35]** ha churn rate **8.50%** (n=3,542), mentre **(45, 55]** arriva a **50.57%** (n=1,311).
+# - La fascia **(55, 65]** resta molto alta (**48.32%**, n=536).
+# - La fascia **(65, 100]** scende a **13.26%** (n=264): il gruppo è piccolo e può riflettere selezione/censura o caratteristiche specifiche del campione.
+
+# %% [markdown]
+# ### Interazioni: Geography × Gender
+#
+# Le differenze per `Geography` e per `Gender` possono combinarsi. Calcoliamo quindi il churn rate per coppie (`Geography`, `Gender`).
+
+# %%
+geo_gender_rate = df.pivot_table(
+    index="Geography",
+    columns="Gender",
+    values=TARGET,
+    aggfunc="mean",
+)
+geo_gender_n = df.pivot_table(
+    index="Geography",
+    columns="Gender",
+    values=TARGET,
+    aggfunc="size",
+)
+
+print("Churn rate Geography x Gender:")
+display(geo_gender_rate)
+
+print("\nCounts Geography x Gender:")
+display(geo_gender_n)
+
+plt.figure(figsize=(5.5, 3.2))
+ax = sns.heatmap(geo_gender_rate, annot=True, fmt=".3f", cmap="Blues")
+ax.set_title("Churn rate: Geography × Gender")
+
+save_current_figure("lesson_01_geo_gender_heatmap.png")
+plt.show()
+
+# %% [markdown]
+# - In **Germany** il churn è alto per entrambi i generi: **37.55%** (Female, n=1,193) e **27.81%** (Male, n=1,316).
+# - In **France** la differenza di genere è marcata: **20.35%** (Female, n=2,261) vs **12.75%** (Male, n=2,753).
+# - Questa analisi suggerisce che alcune feature possano interagire; nelle lezioni successive queste interazioni verranno gestite in modo più sistematico.
+
+# %% [markdown]
+# ## Attenzione al leakage: il caso `Complain`
+#
+# In un progetto reale è cruciale verificare che le feature siano *disponibili al momento della previsione*.
+# Una variabile come `Complain` (reclamo) potrebbe essere registrata **dopo** segnali di churn, diventando una proxy quasi deterministica.
+#
+# Quantifichiamo l’associazione tra `Complain` e `Exited`.
+
+# %%
+ct = pd.crosstab(df["Complain"], df[TARGET], normalize="index")
+ct_counts = pd.crosstab(df["Complain"], df[TARGET])
+
+print("P(Exited | Complain):")
+display(ct)
+
+print("\nCounts:")
+display(ct_counts)
+
+corr_num = (
+    df.select_dtypes(include=[np.number])
+    .corr(numeric_only=True)[TARGET]
+    .drop(TARGET)
+    .sort_values(key=lambda s: s.abs(), ascending=False)
+)
+
+print("\nTop correlazioni (numeriche) con Exited:")
+display(corr_num.head(10))
+
+# %% [markdown]
+# - Se `Complain=0`, la probabilità di churn è **0.050%** (4 su 7,956).
+# - Se `Complain=1`, la probabilità di churn è **99.51%** (2,034 su 2,044).
+# - La correlazione `Complain`–`Exited` è **0.996**, enormemente più alta delle altre: questo è un segnale forte di variabile “proxy”/leaky.
+# - In assenza di documentazione temporale, è prudente trattare `Complain` come sospetta e chiarire se sia disponibile *prima* del churn; in caso contrario, va esclusa dalle feature utilizzabili.
+
+# %% [markdown]
+# ## Riepilogo
+#
+# - Il churn è formulabile come classificazione binaria con target `Exited` (classe positiva = **20.38%**).
+# - Non emergono problemi di missingness o duplicati nel dataset (tassi missing = **0**).
+# - Alcune feature mostrano differenze marcate tra classi (es. mediana `Age` **36** vs **45**, churn rate più alto in Germany).
+# - Menzione del rumore: variabili come `EstimatedSalary` e `Satisfaction Score` figurano come rumorose e casuali rispetto al target.
+# - Le segmentazioni mettono in evidenza pattern forti: `IsActiveMember=0` ha churn rate **26.87%** vs **14.27%** per `IsActiveMember=1`; la fascia età **(45, 55]** arriva a **50.57%**.
+# - `NumOfProducts` mostra un andamento non lineare (es. **7.60%** per 2 prodotti vs **27.71%** per 1 prodotto), con gruppi estremi ma piccoli per 3–4 prodotti.
+# - `Complain` è un fortissimo sospetto di leakage/proxy: `P(Exited=1 | Complain=1)` è **99.51%**.
+#
+# Prossimo passo (Lezione 02): costruire preprocessing e pipeline in modo sistematico e non-leaky.
