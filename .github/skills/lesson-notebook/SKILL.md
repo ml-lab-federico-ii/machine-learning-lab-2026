@@ -39,7 +39,6 @@ If the user wants Copilot to derive sections from the dataset, first run the
 **lesson-discovery** phase to produce:
 
 - `outputs/lesson_plans/lesson_NN_plan.md`
-- `outputs/lesson_plans/lesson_NN_plan.json`
 
 Then generate the notebook using those artifacts (especially the ordered
 section list) to avoid inventing structure.
