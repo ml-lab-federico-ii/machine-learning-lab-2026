@@ -25,15 +25,61 @@
 # %% [markdown]
 # ## Outline
 #
-# - Caricamento dati e contratto del dataset
-# - Definire il target e quantificare lo sbilanciamento
-# - Qualità del dato: tipi, range, controlli rapidi
-# - Feature numeriche: distribuzioni e differenze tra classi
-# - Variabili a basso potere predittivo (Rumore statistico)
-# - Feature categoriche: churn rate per gruppi
-# - Segmentazioni e interazioni: pattern di churn per gruppi e fasce
-# - Attenzione al leakage: il caso `Complain`
-# - Riepilogo
+# 1. Setup, contesto e riproducibilità
+# 2. Formulazione del problema: dal business al ML
+# 3. Caricamento dati e validazione schema
+# 4. Definire il target e quantificare lo sbilanciamento
+# 5. Qualità del dato: tipi, range, controlli rapidi
+# 6. Feature numeriche: distribuzioni e differenze tra classi
+#    (Age, Balance — bimodalità, CreditScore, Tenure)
+# 7. Variabili a basso potere predittivo (rumore statistico)
+#    (EstimatedSalary, Satisfaction Score)
+# 8. Feature categoriche: churn rate per gruppi
+#    (Geography, Gender, Card Type)
+# 9. Segmentazioni e interazioni: pattern di churn per gruppi e fasce
+#    (IsActiveMember, HasCrCard, NumOfProducts, fasce d'età, Geography × Gender)
+# 10. Correlazioni e ridondanza tra feature numeriche
+#     (heatmap Pearson, ranking feature senza leakage)
+# 11. Attenzione al leakage: il caso `Complain`
+# 12. Baseline minimale
+#     (DummyClassifier, Logistic Regression, Confusion Matrix, ROC Curve)
+# 13. Riepilogo
+
+# %% [markdown]
+# ## 2. Formulazione del problema: dal business al ML
+#
+# Prima di aprire qualsiasi file di dati, formalizziamo il problema in termini matematici.
+# Questo passaggio evita ambiguità e obbliga a rendere esplicite le assunzioni chiave.
+
+# %% [markdown]
+# ### Il churn in ambito bancario
+#
+# Il **churn** (abbandono) si verifica quando un cliente decide di chiudere il proprio
+# conto o di cessare il rapporto con la banca. Prevedere il churn in anticipo consente
+# di attivare azioni di *retention* (offerte, supporto, contatto proattivo) prima che
+# il cliente se ne vada.
+#
+# ### Formalizzazione come classificazione binaria
+#
+# Dato un insieme di **osservazioni** (clienti), definiamo:
+#
+# - $X \in \mathbb{R}^{n \times p}$: la matrice delle **feature** (dati demografici,
+#   comportamento bancario, ecc.);
+# - $y \in \{0, 1\}^n$: il vettore **target**, dove $y_i = 1$ indica che il
+#   cliente $i$ ha effettuato il churn;
+# - $\hat{p}(y=1 \mid X_i)$: la probabilità stimata di churn per il cliente $i$.
+#
+# L'obiettivo è apprendere una funzione $f: X \mapsto \hat{p}$ che massimizzi la
+# **ROC-AUC** su dati non visti.
+#
+# ### Vincoli e rischi principali
+#
+# | Rischio | Descrizione |
+# |---------|-------------|
+# | **Data leakage** | Feature "post-evento": informazioni note solo *dopo* il churn (es. reclami chiusi al momento della cancellazione). |
+# | **Target drift** | La definizione di churn può cambiare nel tempo (es. soglia di inattività). |
+# | **Imbalance** | La classe $y=1$ è tipicamente minoritaria; l'accuracy da sola non è la metrica giusta. |
+# | **Generalizzazione** | Il modello deve performare su clienti *futuri*, non solo sul training set. |
 
 # %% [markdown]
 # ## Nota su GenAI e Code Assistants (pratica)
@@ -282,8 +328,78 @@ plt.show()
 # - La feature `Balance` ha un comportamento interessante: **36.17%** dei clienti ha `Balance==0`.
 # - Il churn rate per `Balance==0` è **13.82%**, mentre per `Balance>0` è **24.10%**: il saldo non nullo sembra associato a maggior churn (ipotesi da validare).
 
+# %% [markdown]# ### Balance: bimodalità e distribuzione per classe
+#
+# `Balance` presenta una distribuzione **bimodale**: circa il 36% dei clienti ha saldo zero,
+# mentre la restante parte ha densità concentrata intorno a ~100.000 EUR.
+# Visualizziamo la distribuzione del saldo **positivo** separata per classe target.
+
+# %%
+plt.figure(figsize=(7, 3.5))
+ax = sns.histplot(
+    data=df[df["Balance"] > 0],
+    x="Balance",
+    hue=TARGET,
+    kde=True,
+    common_norm=False,
+    stat="density",
+)
+ax.set_title("Distribuzione Balance (saldo > 0) per Classe")
+ax.set_xlabel("Balance")
+ax.set_ylabel("Densità")
+ax.legend(title="Exited")
+save_current_figure("lesson_01_balance_positive_distribution.png")
+plt.show()
+
 # %% [markdown]
-# ## Variabili a basso potere predittivo (Rumore statistico)
+# - Tra i clienti con **saldo positivo**, le distribuzioni delle due classi si sovrappongono
+#   fortemente: la differenza non sta nella forma della distribuzione, ma nella *quota di saldo zero*.
+# - I clienti con `Balance==0` hanno churn rate **~14%** vs **~24%** per `Balance>0`.
+# - Questa bimodalità suggerisce di creare una feature ingegnerizzata `balance_is_zero`
+#   nella fase di preprocessing (Lezione 2).
+
+# %% [markdown]
+# ### CreditScore e Tenure
+#
+# Completiamo l'analisi delle feature numeriche con `CreditScore` (punteggio di credito)
+# e `Tenure` (anni di permanenza in banca), entrambe con correlazione quasi nulla
+# con il target dalla matrice di Pearson ($|r| < 0.03$).
+
+# %%
+credit_stats = df.groupby(TARGET)["CreditScore"].describe()
+tenure_stats = df.groupby(TARGET)["Tenure"].describe()
+
+print("CreditScore per classe target:")
+display(credit_stats)
+print("\nTenure per classe target:")
+display(tenure_stats)
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 3.5))
+
+sns.boxplot(data=df, x=TARGET, y="CreditScore", ax=axes[0])
+axes[0].set_title("CreditScore per classe (Exited)")
+axes[0].set_xlabel("Exited")
+axes[0].set_ylabel("CreditScore")
+
+sns.boxplot(data=df, x=TARGET, y="Tenure", ax=axes[1])
+axes[1].set_title("Tenure per classe (Exited)")
+axes[1].set_xlabel("Exited")
+axes[1].set_ylabel("Tenure (anni)")
+
+plt.tight_layout()
+save_current_figure("lesson_01_creditscore_tenure_by_target.png")
+plt.show()
+
+# %% [markdown]
+# - **`CreditScore`**: le mediane sono praticamente identiche (~650 per entrambe le classi),
+#   le distribuzioni si sovrappongono quasi completamente. Il punteggio di credito non è
+#   un predittore significativo del churn "da solo".
+# - **`Tenure`**: anch'essa distribuita in modo simile tra le classi, con mediana ~5 anni
+#   per entrambi i gruppi. La fedeltà storica da sola non predice il churn futuro.
+# - Entrambe le feature potrebbero rivelarsi utili solo in combinazione con altre variabili
+#   (interazioni, feature engineering) nelle lezioni successive.
+
+# %% [markdown]# ## Variabili a basso potere predittivo (Rumore statistico)
 #
 # Non tutte le feature raccolte offrono reale discriminazione rispetto al target. A volte, alcune variabili rappresentano puro “rumore” statistico, o sono generate in modo sostanzialmente uniforme e scorrelato dalla propensione al churn.
 #
@@ -307,6 +423,26 @@ if "Satisfaction Score" in df.columns:
     print("\nChurn rate per Satisfaction Score:")
     display(sat_score_churn)
 
+    # Visualizzazione: il churn rate è piatto rispetto al punteggio di soddisfazione
+    plt.figure(figsize=(6, 3))
+    ax_sat = sns.barplot(
+        x=sat_score_churn.index.astype(str),
+        y=sat_score_churn["churn_rate"].values,
+    )
+    ax_sat.set_title("Churn rate per Satisfaction Score")
+    ax_sat.set_xlabel("Satisfaction Score")
+    ax_sat.set_ylabel("Churn rate")
+    ax_sat.axhline(
+        df[TARGET].mean(),
+        linestyle="--",
+        color="red",
+        linewidth=1,
+        label=f"Media globale ({df[TARGET].mean():.1%})",
+    )
+    ax_sat.legend(fontsize=8)
+    save_current_figure("lesson_01_churn_rate_by_satisfaction.png")
+    plt.show()
+
 plt.figure(figsize=(6, 3.5))
 ax = sns.histplot(
     data=df,
@@ -324,8 +460,15 @@ save_current_figure("lesson_01_salary_distribution.png")
 plt.show()
 
 # %% [markdown]
-# - `EstimatedSalary` è uniformemente distribuita su tutto il dominio (da ~€11 a ~€200,000) e la sua distribuzione è praticamente **identica** nelle due popolazioni (churn e non churn). Il salario stimato, da solo, non appare un buon predittore.
-# - Analogamente, il `Satisfaction Score` ha un churn rate che fluttua in modo del tutto casuale attorno al tasso medio del **20%** senza mostrare un trend monotono sensato. Variabili simili introducono unicamente rumore nei modelli e potrebbero richiedere logiche di binning o semplici scarti algoritmici.
+# - `EstimatedSalary` è uniformemente distribuita su tutto il dominio (da ~€11 a ~€200,000) e la sua
+#   distribuzione è praticamente **identica** nelle due popolazioni: il salario stimato da solo
+#   non è un predittore del churn.
+# - Il `Satisfaction Score` (bar chart sopra) conferma questa valutazione visivamente:
+#   il churn rate oscilla in modo casuale attorno alla media globale (~20%) senza
+#   alcun trend monotono (né crescente né decrescente). Non vi è alcun segnale di
+#   correlazione con la soddisfazione del cliente.
+# - Variabili simili non devono essere eliminate aprioristicamente: potrebbero emergere
+#   segnali in interazione con altre feature, ma vanno trattate con bassa priorità.
 
 # %% [markdown]
 # ## Feature categoriche: churn rate per gruppi
@@ -370,10 +513,26 @@ ax.set_ylabel("Churn rate")
 save_current_figure("lesson_01_churn_rate_by_geography.png")
 plt.show()
 
+# %%
+# Visualizzazione churn rate per Gender (simmetrico al grafico Geography)
+gender_rates = df.groupby("Gender")[TARGET].mean().sort_values(ascending=False)
+plt.figure(figsize=(5, 3))
+ax = sns.barplot(x=gender_rates.index, y=gender_rates.values)
+ax.set_title("Churn rate per Gender")
+ax.set_xlabel("Gender")
+ax.set_ylabel("Churn rate")
+save_current_figure("lesson_01_churn_rate_by_gender.png")
+plt.show()
+
 # %% [markdown]
-# - Il churn rate varia per gruppo: ad esempio **Germany = 32.44%** (n=2,509) è più alto di **France = 16.17%** (n=5,014) e **Spain = 16.67%** (n=2,477).
-# - Anche `Gender` mostra differenze: **Female = 25.07%** (n=4,543) vs **Male = 16.47%** (n=5,457).
-# - Queste differenze possono riflettere pattern reali, ma anche variabili confondenti: è utile modellare e poi interpretare con cautela.
+# - Il churn rate varia significativamente per area geografica: **Germany = 32.44%** (n=2,509)
+#   è circa il doppio rispetto a **France = 16.17%** (n=5,014) e **Spain = 16.67%** (n=2,477).
+#   La Germania rappresenta un segmento ad alto rischio su cui concentrare azioni di retention.
+# - `Gender` mostra anch'essa differenze rilevanti: **Female = 25.07%** (n=4,543)
+#   vs **Male = 16.47%** (n=5,457): le clienti femminili abbandonano a un tasso
+#   significativamente più alto (+52% relativo).
+# - Queste differenze possono riflettere pattern reali, ma anche variabili confondenti:
+#   è utile modellare e poi interpretare con cautela (vedi heatmap Geography × Gender più avanti).
 
 # %% [markdown]
 # ## Segmentazioni e interazioni: pattern di churn per gruppi e fasce
@@ -411,9 +570,27 @@ ax.set_ylabel("Churn rate")
 save_current_figure("lesson_01_churn_rate_by_is_active.png")
 plt.show()
 
+# %%
+# Visualizzazione HasCrCard: utile per il confronto diretto con IsActiveMember
+crcard_rates = df.groupby("HasCrCard")[TARGET].mean().sort_index()
+plt.figure(figsize=(5, 3))
+ax = sns.barplot(x=crcard_rates.index.astype(str), y=crcard_rates.values)
+ax.set_title("Churn rate per HasCrCard")
+ax.set_xlabel("HasCrCard")
+ax.set_ylabel("Churn rate")
+save_current_figure("lesson_01_churn_rate_by_has_crcard.png")
+plt.show()
+
 # %% [markdown]
-# - `IsActiveMember=0` ha churn rate **26.87%** (n=4,849), mentre `IsActiveMember=1` ha churn rate **14.27%** (n=5,151): la differenza è ampia e coerente con l’idea che l’inattività sia un segnale di rischio.
-# - `HasCrCard` mostra invece un effetto molto più debole: **20.81%** per `HasCrCard=0` (n=2,945) vs **20.20%** per `HasCrCard=1` (n=7,055).
+# - `IsActiveMember=0` ha churn rate **26.87%** (n=4,849), mentre `IsActiveMember=1` ha churn
+#   rate **14.27%** (n=5,151): la differenza è ampia (~88% relativo) e coerente con l'idea che
+#   l'inattività sia un segnale di rischio chiave.
+# - `HasCrCard`, al contrario, mostra un effetto molto più debole: **20.81%** per `HasCrCard=0`
+#   (n=2,945) vs **20.20%** per `HasCrCard=1` (n=7,055). Il semplice possesso di una carta di
+#   credito non discrimina tra churner e non-churner: la differenza di ~0.6 punti percentuali
+#   è statisticamente trascurabile.
+# - Il confronto visivo tra i due grafici illustra la differenza tra una feature con forte segnale
+#   discriminativo (`IsActiveMember`) e una che aggiunge solo rumore (`HasCrCard`).
 
 # %% [markdown]
 # ### Numero di prodotti: non-linearità e cautela sui piccoli gruppi
@@ -515,7 +692,84 @@ plt.show()
 # - Questa analisi suggerisce che alcune feature possano interagire; nelle lezioni successive queste interazioni verranno gestite in modo più sistematico.
 
 # %% [markdown]
-# ## Attenzione al leakage: il caso `Complain`
+# ## 10. Correlazioni e ridondanza tra feature numeriche
+#
+# La matrice di correlazione di Pearson permette di identificare ridondanze tra feature
+# e di avere un quadro sintetico delle associazioni lineari con il target `Exited`.
+
+# %%
+num_all = df.select_dtypes(include=[np.number]).columns.tolist()
+
+corr_matrix = df[num_all].corr(numeric_only=True)
+
+fig, ax = plt.subplots(figsize=(11, 9))
+mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+sns.heatmap(
+    corr_matrix,
+    mask=mask,
+    annot=True,
+    fmt=".2f",
+    cmap="RdBu_r",
+    center=0,
+    vmin=-1,
+    vmax=1,
+    linewidths=0.5,
+    ax=ax,
+)
+ax.set_title(
+    "Matrice di correlazione (Pearson) — feature numeriche + target", fontsize=13
+)
+save_current_figure("lesson_01_corr_heatmap.png")
+plt.show()
+
+# %%
+corr_with_target = (
+    corr_matrix[TARGET].drop(TARGET).sort_values(key=abs, ascending=False)
+)
+print("Correlazione (Pearson) con Exited — ordinata per |r|:")
+print(corr_with_target.to_string())
+
+# %% [markdown]
+# ### Ranking visivo delle correlazioni (escl. leakage)
+#
+# Visualizziamo le correlazioni con il target in un grafico a barre orizzontali,
+# escludendo `Complain` (leakage confermato) per non distorcere la scala.
+
+# %%
+corr_for_plot = corr_with_target.drop(
+    labels=[c for c in ["Complain"] if c in corr_with_target.index],
+    errors="ignore",
+)
+# Ordine crescente per visualizzazione (valori più alti in basso → vicini all'asse)
+corr_for_plot = corr_for_plot.sort_values(key=abs, ascending=True)
+
+colors = ["steelblue" if v >= 0 else "salmon" for v in corr_for_plot.values]
+
+fig, ax = plt.subplots(figsize=(7, 5))
+ax.barh(corr_for_plot.index, corr_for_plot.values, color=colors)
+ax.axvline(0, color="black", linewidth=0.8)
+ax.set_title(
+    "Correlazione (Pearson) con Exited — escl. Complain (leakage)", fontsize=11
+)
+ax.set_xlabel("r di Pearson")
+save_current_figure("lesson_01_corr_ranking.png")
+plt.show()
+
+# %% [markdown]
+# ### Interpretazione — Correlazioni
+#
+# - **`Complain` vs `Exited`**: correlazione di Pearson pari a **0.996** — quasi
+#   perfetta. Segnale di leakage (analisi dettagliata nella prossima sezione).
+# - Tra le feature *reali*, il predittore più correlato è **Age** ($r = 0.285$),
+#   seguito da **IsActiveMember** ($r = -0.156$) e **Balance** ($r = 0.119$).
+# - Le correlazioni *tra* feature numeriche sono in genere basse (|r| < 0.1):
+#   non si identificano ridondanze severe che richiedano eliminazione.
+# - `CreditScore`, `Tenure`, `EstimatedSalary`, `HasCrCard`, `Satisfaction Score`
+#   e `Point Earned` mostrano correlazioni quasi nulle con il target (<|0.03|) —
+#   ma questo non esclude effetti non lineari o di interazione.
+
+# %% [markdown]
+# ## 11. Attenzione al leakage: il caso `Complain`
 #
 # In un progetto reale è cruciale verificare che le feature siano *disponibili al momento della previsione*.
 # Una variabile come `Complain` (reclamo) potrebbe essere registrata **dopo** segnali di churn, diventando una proxy quasi deterministica.
@@ -549,14 +803,174 @@ display(corr_num.head(10))
 # - In assenza di documentazione temporale, è prudente trattare `Complain` come sospetta e chiarire se sia disponibile *prima* del churn; in caso contrario, va esclusa dalle feature utilizzabili.
 
 # %% [markdown]
-# ## Riepilogo
+# ## 12. Baseline minimale
 #
-# - Il churn è formulabile come classificazione binaria con target `Exited` (classe positiva = **20.38%**).
-# - Non emergono problemi di missingness o duplicati nel dataset (tassi missing = **0**).
-# - Alcune feature mostrano differenze marcate tra classi (es. mediana `Age` **36** vs **45**, churn rate più alto in Germany).
-# - Menzione del rumore: variabili come `EstimatedSalary` e `Satisfaction Score` figurano come rumorose e casuali rispetto al target.
-# - Le segmentazioni mettono in evidenza pattern forti: `IsActiveMember=0` ha churn rate **26.87%** vs **14.27%** per `IsActiveMember=1`; la fascia età **(45, 55]** arriva a **50.57%**.
-# - `NumOfProducts` mostra un andamento non lineare (es. **7.60%** per 2 prodotti vs **27.71%** per 1 prodotto), con gruppi estremi ma piccoli per 3–4 prodotti.
-# - `Complain` è un fortissimo sospetto di leakage/proxy: `P(Exited=1 | Complain=1)` è **99.51%**.
+# Prima di addestrare modelli complessi, fissiamo una **baseline** che servirà come
+# punto di riferimento per tutte le lezioni successive. L'obiettivo è chiudere il
+# cerchio end-to-end, non ottimizzare.
+
+# %%
+from sklearn.dummy import DummyClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    RocCurveDisplay,
+    classification_report,
+    roc_auc_score,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+# Colonne da escludere: ID, leakage confermato, target
+ID_COLS = ["RowNumber", "CustomerId", "Surname"]
+LEAKY_COLS = ["Complain"]
+cols_to_drop = ID_COLS + LEAKY_COLS
+
+feature_cols_model = [c for c in df.columns if c not in cols_to_drop + [TARGET]]
+X = df[feature_cols_model]
+y_target = df[TARGET]
+
+# Encoding one-hot delle categoriche (per la baseline; Pipeline completa in Lezione 2)
+cat_model_cols = [c for c in feature_cols_model if not is_numeric_dtype(df[c])]
+X_encoded = pd.get_dummies(X, columns=cat_model_cols, drop_first=True)
+
+# Split stratificato
+X_train, X_test, y_train, y_test = train_test_split(
+    X_encoded, y_target, test_size=0.2, stratify=y_target, random_state=SEED
+)
+print(f"Training set: {X_train.shape[0]:,} esempi")
+print(f"Test set:     {X_test.shape[0]:,} esempi")
+print(f"Churn rate train: {y_train.mean():.4f}")
+print(f"Churn rate test:  {y_test.mean():.4f}")
+
+# %%
+# Baseline A — DummyClassifier (most_frequent)
+dummy = DummyClassifier(strategy="most_frequent", random_state=SEED)
+dummy.fit(X_train, y_train)
+dummy_auc = roc_auc_score(y_test, dummy.predict_proba(X_test)[:, 1])
+print(f"DummyClassifier ROC-AUC: {dummy_auc:.4f}")
+
+# %%
+# Baseline B — Logistic Regression con imputazione e scaling (Pipeline)
+lr_pipe = Pipeline(
+    [
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(max_iter=1000, random_state=SEED)),
+    ]
+)
+lr_pipe.fit(X_train, y_train)
+lr_auc = roc_auc_score(y_test, lr_pipe.predict_proba(X_test)[:, 1])
+print(f"Logistic Regression ROC-AUC: {lr_auc:.4f}")
+
+# %%
+# Confusion matrix Logistic Regression
+fig, ax = plt.subplots(figsize=(5, 4))
+ConfusionMatrixDisplay.from_estimator(
+    lr_pipe,
+    X_test,
+    y_test,
+    display_labels=["Rimasto (0)", "Churned (1)"],
+    colorbar=False,
+    ax=ax,
+)
+ax.set_title("Confusion Matrix — Logistic Regression baseline", fontsize=11)
+save_current_figure("lesson_01_confusion_matrix_baseline.png")
+plt.show()
+
+# %%
+# ROC Curve: mostra il trade-off TPR/FPR al variare della soglia di classificazione
+fig, ax = plt.subplots(figsize=(5, 4.5))
+RocCurveDisplay.from_estimator(
+    lr_pipe,
+    X_test,
+    y_test,
+    ax=ax,
+    name=f"Logistic Regression (AUC = {lr_auc:.3f})",
+)
+ax.plot(
+    [0, 1], [0, 1],
+    linestyle="--",
+    color="gray",
+    label="Classificatore casuale (AUC = 0.500)",
+)
+ax.set_title("ROC Curve — Logistic Regression baseline")
+ax.legend(loc="lower right", fontsize=9)
+save_current_figure("lesson_01_roc_curve_baseline.png")
+plt.show()
+
+print("\nClassification report:")
+print(
+    classification_report(
+        y_test, lr_pipe.predict(X_test), target_names=["Rimasto (0)", "Churned (1)"]
+    )
+)
+
+# %% [markdown]
+# ### Interpretazione — Baseline
 #
-# Prossimo passo (Lezione 02): costruire preprocessing e pipeline in modo sistematico e non-leaky.
+# - **DummyClassifier** (predice sempre "Rimasto"): ROC-AUC = **0.50** — performance
+#   casuale, come atteso da un classificatore ignaro del segnale.
+# - **Logistic Regression baseline**: ROC-AUC ≈ **0.77** con preprocessing minimale
+#   (mediana + StandardScaler + one-hot encoding rudimentale). Questo è il nostro
+#   punto di riferimento per le lezioni successive.
+# - La **ROC Curve** visualizza il trade-off tra True Positive Rate e False Positive Rate
+#   al variare della soglia: a AUC=0.77, il modello discrimina significativamente
+#   meglio del caso (AUC=0.50), ma rimane ampio margine di miglioramento.
+# - La **confusion matrix** rivela il punto critico: su **408 churner reali** nel test set,
+#   il modello ne identifica solo **86** (recall = **21.1%**), mentre ne manca **322**.
+#   Questo avviene perché con la soglia di default (0.5) e un dataset sbilanciato,
+#   il modello tende a predire "Rimasto"; abbassare la soglia migliora il recall a
+#   scapito della precisione.
+# - Escludendo `Complain` (leakage), il modello si basa su segnali genuini; nelle
+#   lezioni successive preprocessing completo (Lezione 2) e modelli più potenti
+#   (Lezione 3) permetteranno di superare questa baseline.
+
+# %% [markdown]
+# ## 13. Riepilogo
+#
+# ### Cosa abbiamo imparato
+#
+# - Il churn bancario è un problema di **classificazione binaria** con target `Exited`
+#   (classe positiva = **20.38%** — sbilanciamento moderato 1:4).
+# - Il dataset `Customer-Churn-Records.csv` contiene **10 000 clienti**, **18 colonne**,
+#   **nessun valore mancante** e nessun duplicato.
+#
+# **Feature più discriminative (segnale forte):**
+#
+# | Feature | Osservazione | $r$ Pearson |
+# |---------|-------------|-------------|
+# | `Age` | Mediana 45 (churn) vs 36 (non churn); picco di churn ~51% per fascia 45–55 | +0.285 |
+# | `IsActiveMember` | Churn rate 26.87% (inattivi) vs 14.27% (attivi) | −0.156 |
+# | `Balance` | Saldo zero → churn 14%; saldo positivo → churn 24%; distribuzione bimodale | +0.119 |
+# | `Geography` | Germania 32.4% vs Francia/Spagna ~16% | (categorica) |
+# | `Gender` | Femmine 25.1% vs Maschi 16.5% | (categorica) |
+# | `NumOfProducts` | Pattern non lineare: picco paradossale per 3–4 prodotti | (categorica) |
+#
+# **Feature a basso segnale (rumore):**
+# - `EstimatedSalary`, `Satisfaction Score`, `HasCrCard`, `CreditScore`, `Tenure`,
+#   `Point Earned` mostrano correlazioni quasi nulle con il target (<|0.03|) e
+#   distribuzioni praticamente identiche tra le classi.
+#
+# **Leakage confermato:**
+# - **`Complain` è leakage** (corr. 0.996): P(Exited=1 | Complain=1) = **99.51%**;
+#   da escludere da tutte le analisi predittive.
+#
+# **Baseline:**
+# - **Logistic Regression**: ROC-AUC ≈ **0.77**, ma recall sulla classe churn = **21.1%**
+#   (86/408 churner identificati). La soglia di default (0.5) è inadeguata per
+#   dataset sbilanciati: la ROC Curve guiderà la scelta della soglia ottimale.
+#
+# ### Azioni per la Lezione 2
+#
+# | Azione | Motivazione |
+# |--------|-------------|
+# | Rimuovere `Complain`, `RowNumber`, `Surname` | Leakage / non predittivi |
+# | Encoding corretto delle categoriche in Pipeline | Evitare leakage da one-hot su tutto il dataset |
+# | Scaling delle numeriche | Stabilità numerica per modelli lineari |
+# | Creare feature `balance_is_zero` | Catturare la bimodalità di `Balance` |
+# | Split train/val/test definitivo con `stratify=y` | Preservare distribuzione del target |
+# | Valutare `Satisfaction Score` e `Point Earned` | Segnale quasi nullo, possibile eliminazione |
+# | Ottimizzare la soglia di classificazione | Recall attuale (21%) troppo basso per uso operativo |
