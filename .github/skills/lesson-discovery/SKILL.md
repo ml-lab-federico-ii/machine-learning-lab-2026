@@ -1,6 +1,6 @@
 ---
 name: lesson-discovery
-description: Produces a data-driven lesson plan (scope + EDA findings + ordered section outline) for the "Machine Learning for Financial Analysis" lab by reading `syllabus/README.MD` and inspecting/loading the dataset from `data/archive.zip`. Use this skill whenever the user asks to create a lesson notebook "from scratch", asks for "outline/plan" for a lesson, or wants Copilot to decide notebook sections from the dataset before writing the notebook.
+description: Produces a lesson plan in markdown format based on the syllabus scope and the dataset understanding. This plan will guide the notebook-writing phase and ensure that all necessary analyses are performed in a logical order Use this skill whenever the user asks to create a lesson notebook "from scratch", asks for "outline/plan" for a lessonm, even without creating the notebook immediately.
 ---
 
 # Skill: Lesson Discovery (Scope → EDA → Plan Artifacts)
@@ -14,18 +14,6 @@ Goal:
 - validate the dataset contract by inspecting/loading data **only when needed**;
 - persist results into two intermediate artifacts:
   - `outputs/lesson_plans/lesson_NN_plan.md`
-  - `outputs/lesson_plans/lesson_NN_plan.json`
-
----
-
-## Hard Constraints (Project Contracts)
-
-- Dataset canonical location: `data/archive.zip`.
-- First action when loading data: **list archive members**.
-- Prefer reading CSV directly from the ZIP.
-- Never write extracted raw files under `data/`; if needed, extract to `outputs/data/`.
-- All narrative content written for humans must be **in Italian**.
-- Do not invent dataset schema, target column, or label meanings: validate via EDA.
 
 ---
 
@@ -50,77 +38,31 @@ If emails are missing, keep explicit `TODO` placeholders in plan artifacts.
 
 Write a short Italian summary of the scope (3–6 bullets) to include in `plan.md`.
 
-### Step B — Gather Existing Evidence (Previous Lessons)
+### Step B — Syllabus declares the main topics, you explode them into a deep structured lesson plan
+
+Derive the main topic of the lesson from the syllabus but explode it into a more detailed structure of sections and operations. For example, if the syllabus says that lesson 1 is about “formulating churn as a classification problem and performing EDA”, you should plan any possible exploratory analysis that can be done on the dataset to understand the target, feature distributions, feature correlation, missingness, imbalance, and any other relevant patterns. Then, you should organize these analyses into a logical sequence of sections that will form the backbone of the notebook. Each section should have a clear goal and specify which computations and outputs will be produced. This applies to all lessons: the syllabus gives you the high-level topics, but you need to decide the exact operations and their order based on the dataset and the learning objectives.
+
+Write the section outline in Italian, with clear goals and specified computations/outputs, to include in `plan.md`.
+
+
+### STEP C — Gather Existing Evidence (Previous Lessons)
+Lessons should always be continuative: for example, if Lesson 2 is about preprocessing, you should reuse the dataset understanding from Lesson 1 and focus on cleaning, encoding, scaling, and splitting, rather than repeating the EDA. If Lesson 3 is about modeling, you should build on the cleaned dataset from Lesson 2 and focus on training models and evaluating them, rather than redoing the preprocessing. This way, each lesson builds on the previous ones and creates a coherent learning path for the students.
 
 Before running new analyses, look for existing artifacts that can be reused.
 Examples of useful evidence:
 
-- Previous lesson plan(s): `outputs/lesson_plans/lesson_??_plan.md|json`
+- Previous lesson plan(s): `outputs/lesson_plans/lesson_??_plan.md`
 - Previous student notebook(s): `notebooks/lesson-??/lesson_??.py`
 - Saved datasets: `outputs/data/*.parquet` or `outputs/data/*.csv`
 - Saved figures: `outputs/figures/*.png`
 
-Rules:
-- Prefer reusing prior computed insights when the syllabus indicates continuity.
-  Example: if Lesson 2 says “missing values / outlier / split”, reuse Lesson 1
-  dataset understanding and focus on transformations.
-- If the required artifacts do not exist yet, fall back to the minimal analyses
-  needed to produce the lesson safely.
+Record in `plan.md` artifacts that you need to reuse these materials and which specific pieces of evidence you will leverage (e.g., “reusing the target distribution plot from Lesson 1”).
 
-Record in the plan:
-- which prior artifacts were found and used
-- which ones were missing (and how you compensated)
+### Step D — Derive Notebook Sections + Concrete Operations
 
-### Step C — Establish Data Context (When Needed)
+Based on the syllabus scope and the dataset understanding, derive a concrete structure of notebook sections and operations. For example, if the lesson is about EDA, you might have sections like “Understanding the target distribution”, “Analyzing feature distributions”, “Checking for missing values”, “Exploring feature correlations”, etc. Each section should have a clear goal (e.g., “Define the variable of interest and quantify its prevalence”) and specify which computations will be performed (e.g., `value_counts(normalize=True)`, `histogram`, `heatmap`, etc.) and which artifacts will be produced (e.g., saved figures, tables, etc.). This structured outline will guide the notebook-writing phase and ensure that all necessary analyses are performed in a logical order.
 
-- Check that `data/archive.zip` exists.
-- List members (filenames).
-- Select the most relevant CSV(s) based on:
-  - name patterns (e.g. `train`, `test`, `churn`, `labels`, `customer`)
-  - schema validation after loading (target presence, expected columns)
-
-Only perform this step if the lesson requires interacting with raw data (e.g.
-EDA in Lesson 1, preprocessing in Lesson 2, modeling in Lesson 3). If the lesson
-is purely theoretical, skip loading data and focus on structure + examples.
-
-Record:
-- chosen file(s)
-- rationale for the choice
-
-### Step D — Execute Only the Required Analyses
-
-Derive the required operations from the syllabus, then execute the minimum
-analyses needed to support those operations with evidence.
-
-Examples (non-exhaustive):
-
-- If the lesson includes **EDA** topics: compute target distribution, summary
-  stats, missingness, and a small set of feature analyses.
-- If the lesson is about **preprocessing**: compute missingness/outliers
-  diagnostics, define train/val/test split strategy, validate leakage risks,
-  and design the preprocessing pipeline.
-- If the lesson is about **metrics/imbalance**: compute baseline metrics and
-  class balance; select suitable metrics and validation approach.
-
-When the syllabus suggests continuity, reuse prior outputs instead of repeating
-EDA. For example:
-- Lesson 2 can reference Lesson 1’s dataset understanding and focus on cleaning
-  + pipeline building.
-
-If the target is ambiguous:
-- propose 1–2 candidates and justify using evidence (column name + value set)
-- do **not** proceed to modeling decisions without resolving the target
-
-### Step E — Derive Notebook Sections + Concrete Operations
-
-Translate scope + EDA into an ordered section list.
-
-Each section must:
-- have a clear goal (Italian)
-- specify which computations/plots are needed
-- specify what outputs/figures (if any) will be saved under `outputs/`
-
-Keep the outline **lean** and consistent with the syllabus (no extra topics).
+Write the section outline in Italian, with clear goals and specified computations/outputs, to include in `plan.md`.
 
 ---
 
@@ -130,92 +72,12 @@ Keep the outline **lean** and consistent with the syllabus (no extra topics).
 
 Write: `outputs/lesson_plans/lesson_NN_plan.md`
 
-Must include (in Italian):
-- lesson metadata (title, authors, emails, last updated)
-- dataset provenance (archive members, selected file(s))
-- EDA highlights with real computed numbers
-- ordered outline (the exact section titles to use in the notebook)
-
-### 2) JSON plan
-
-Write: `outputs/lesson_plans/lesson_NN_plan.json`
-
-Requirements:
-- valid JSON
-- stable keys (so the notebook-writer can consume it)
-
-Suggested schema:
-
-```json
-{
-  "lesson": {
-    "number": "02",
-    "title": "Preprocessing e Ingegneria delle Feature",
-    "authors": ["Enrico Huber", "Pietro Soglia"],
-    "emails": ["TODO", "TODO"],
-    "last_updated": "2026-03-05"
-  },
-  "syllabus": {
-    "source": "syllabus/README.MD",
-    "theory_topics": ["..."],
-    "practice_topics": ["..."]
-  },
-  "dependencies": {
-    "previous_lessons_considered": ["01"],
-    "artifacts_used": [
-      "outputs/lesson_plans/lesson_01_plan.json",
-      "notebooks/lesson-01/lesson_01.py"
-    ],
-    "artifacts_missing": []
-  },
-  "data": {
-    "archive_path": "data/archive.zip",
-    "members": ["..."],
-    "selected_files": ["..."],
-    "load_notes": "Perché questi file sono quelli corretti"
-  },
-  "evidence": {
-    "n_rows": 10000,
-    "n_cols": 14,
-    "target": {
-      "name": "Exited",
-      "type": "binary",
-      "positive_label": 1,
-      "class_balance": {"0": 6064, "1": 3936}
-    },
-    "top_missing": [
-      {"column": "Tenure", "missing_rate": 0.012}
-    ]
-  },
-  "operations": [
-    {
-      "id": "split_strategy",
-      "type": "data_preparation",
-      "goal": "Definire train/validation/test evitando leakage.",
-      "inputs": ["data/archive.zip"],
-      "outputs": [],
-      "notes": "Specificare criteri e seed."
-    }
-  ],
-  "sections": [
-    {
-      "id": "eda_target",
-      "title": "Comprendere il target e lo sbilanciamento",
-      "goal": "Definire la variabile di interesse e quantificare la prevalenza.",
-      "computations": ["value_counts(normalize=True)", "barplot"],
-      "artifacts": []
-    }
-  ],
-  "open_questions": [
-    "TODO: confermare email autori"
-  ]
-}
-```
-
-Populate numeric fields with **real computed values** from the executed EDA.
-
-If a lesson does not require EDA, keep `evidence` minimal and focus on
-`operations` + `sections`.
+Must include:
+- Title, Authors, Emails, Last updated
+- Italian summary of the lesson scope (3–6 bullets).
+- List of existing evidence/artifacts that will be reused (with specific details).
+- Detailed section outline with goals and specified computations/outputs.
+- Clear formatting and structure for readability.
 
 ---
 
