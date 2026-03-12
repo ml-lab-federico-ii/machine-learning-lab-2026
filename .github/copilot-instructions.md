@@ -41,24 +41,17 @@ Queste istruzioni sono **always-on** e valgono per tutto il repository. Devono r
 
 ## Riproducibilità
 
-- Ogni notebook deve definire una costante `SEED = 42` (o altro valore fisso) e usarla coerentemente.
+- Ogni notebook deve definire una costante `SEED = 42` e usarla coerentemente.
 
 ## Workflow standard: “crea notebook per lezione NN”
 
 1. **Discovery (analisi + planning):**
-   - Leggere `syllabus/README.MD` per lo scope della lezione NN.
-   - Ispezionare `data/archive.zip` per individuare i file rilevanti.
-   - Riutilizzare evidenze/output di lezioni precedenti quando sensato (non rifare EDA se non serve).
-   - Eseguire solo l’analisi minima richiesta dai topic della lezione.
-   - Produrre artefatti intermedi:
-     - `outputs/lesson_plans/lesson_NN_plan.md`
-     - `outputs/lesson_plans/lesson_NN_plan.json`
+  - Usare la skill `lesson-discovery`
 
 2. **Notebook writing:**
-  - Generare `notebooks/lesson-0N/lesson_NN.py` usando gli artefatti del plan.
-   - Includere una sezione `## Outline` derivata da `lesson_NN_plan.json` (es. `sections[].title`).
+  - Generare `notebooks/lesson-0N/lesson_NN.py` usando la skill `lesson-notebook` con il piano creato.
 
 ## Skills del repo
 
-- Usare `lesson-discovery` per creare plan `.md` + `.json`.
+- Usare `lesson-discovery` per creare plan `.md`.
 - Usare `lesson-notebook` per scrivere il notebook studente.
