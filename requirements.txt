@@ -9,3 +9,4 @@ jupytext
 ipykernel
 imbalanced-learn
 shap
+xgboost
