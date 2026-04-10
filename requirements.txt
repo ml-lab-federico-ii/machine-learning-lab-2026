@@ -1,8 +1,12 @@
 numpy
 pandas
+pyarrow
 scikit-learn
 matplotlib
 seaborn
 jupyter
 jupytext
 ipykernel
+imbalanced-learn
+shap
+xgboost
