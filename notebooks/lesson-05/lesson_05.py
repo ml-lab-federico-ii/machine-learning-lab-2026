@@ -398,30 +398,32 @@ for i, score in enumerate(cv_scores_baseline, 1):
     print(f"  Fold {i}: AUC = {score:.4f}")
 print(f"\n  Media   = {cv_scores_baseline.mean():.4f}")
 print(f"  Std     = {cv_scores_baseline.std():.4f}")
-print(f"  Range   = [{cv_scores_baseline.min():.4f}, "
-      f"{cv_scores_baseline.max():.4f}]")
+print(
+    f"  Range   = [{cv_scores_baseline.min():.4f}, " f"{cv_scores_baseline.max():.4f}]"
+)
 print(f"\n  Singolo val AUC (L3) = {val_auc:.4f}")
-print(f"  Δ (media CV − val)   = "
-      f"{cv_scores_baseline.mean() - val_auc:+.4f}")
+print(f"  Δ (media CV − val)   = " f"{cv_scores_baseline.mean() - val_auc:+.4f}")
 
 # %% [markdown]
 # ### Interpretazione della Cross-Validation
 #
-# *Questa sezione verrà completata dopo l'esecuzione della cella
-# precedente, citando i valori reali osservati.*
+# La 5-fold CV sul RF baseline produce una **media di 0.8462** —
+# sensibilmente inferiore al singolo valore di validation 0.8733 della
+# Lezione 3 (Δ ≈ −0.027). Cosa significa?
 #
-# **Osservazioni chiave:**
-# - La media CV fornisce una stima della performance che possiamo
-#   confrontare con il singolo valore di validation della L3.
-# - La deviazione standard ci dice quanto la performance varia tra fold.
-# - Se std < 0.02, il modello è stabile — la stima del singolo split
-#   era affidabile.
-# - Se std > 0.03, c'è instabilità — il modello è sensibile ai dati.
+# Il singolo split era **ottimistico**: le 2000 osservazioni finite nel
+# validation set della L3 erano, per caso, "più facili" della media.
+# La CV, usando tutti i dati del training set come validazione a turno,
+# ci dà una stima più conservativa e realistica.
 #
-# **Indipendentemente dalla stabilità, il problema dell'overfitting
-# resta**: il modello ha train AUC = 1.0, che indica memorizzazione.
-# Possiamo regolarizzare il modello senza perdere troppa performance?
-# Questa è la domanda del blocco successivo.
+# La deviazione standard è contenuta (< 0.02), quindi il modello è
+# ragionevolmente stabile tra i fold: non dipende in modo critico da
+# *quali* osservazioni finiscono nel fold di validazione.
+#
+# **Ma il problema fondamentale resta**: il modello ha Train AUC = 1.0
+# — ha memorizzato il training set. La CV ci dice che la *stima* era
+# ottimistica, ma non risolve l'overfitting. Per quello, servono
+# vincoli alla complessità del modello: la **regolarizzazione**.
 
 # %% [markdown]
 # ---
@@ -459,22 +461,20 @@ for depth in max_depths:
         class_weight="balanced",
         random_state=SEED,
     )
-    scores = cross_val_score(
-        rf_d, X_train, y_train, cv=cv, scoring="roc_auc"
-    )
+    scores = cross_val_score(rf_d, X_train, y_train, cv=cv, scoring="roc_auc")
     # AUC su train (fit su tutto X_train)
     rf_d.fit(X_train, y_train)
-    train_auc_d = roc_auc_score(
-        y_train, rf_d.predict_proba(X_train)[:, 1]
-    )
+    train_auc_d = roc_auc_score(y_train, rf_d.predict_proba(X_train)[:, 1])
     depth_label = str(depth) if depth is not None else "None"
-    depth_results.append({
-        "max_depth": depth_label,
-        "CV AUC mean": scores.mean(),
-        "CV AUC std": scores.std(),
-        "Train AUC": train_auc_d,
-        "Gap": train_auc_d - scores.mean(),
-    })
+    depth_results.append(
+        {
+            "max_depth": depth_label,
+            "CV AUC mean": scores.mean(),
+            "CV AUC std": scores.std(),
+            "Train AUC": train_auc_d,
+            "Gap": train_auc_d - scores.mean(),
+        }
+    )
     print(
         f"  max_depth={depth_label:>4s}  "
         f"CV={scores.mean():.4f}±{scores.std():.4f}  "
@@ -522,18 +522,23 @@ plt.show()
 # %% [markdown]
 # ### Osservazioni su max_depth
 #
-# *Questa interpretazione verrà completata citando i valori reali
-# osservati dall'esecuzione.*
-#
 # Il grafico mostra chiaramente il **bias-variance tradeoff**:
-# - Con profondità basse (es. 5) il modello potrebbe essere troppo
-#   semplice (underfitting): la curva CV è bassa.
-# - Con profondità illimitata (None) il modello memorizza il training
-#   set: il gap tra Train e CV è massimo.
-# - Esiste un punto intermedio dove la CV AUC è massimizzata e il gap
-#   è ragionevole.
 #
-# Questo ci dà un **primo range candidato** per il tuning sistematico.
+# - **max_depth=5**: Train AUC ≈ 0.865, CV AUC ≈ 0.840. Il modello è
+#   troppo semplice — la curva CV è la più bassa. Ma il gap è minimo
+#   (≈ 0.025): non c'è overfitting, c'è underfitting.
+# - **max_depth=10**: Train AUC ≈ 0.978, CV AUC ≈ 0.850. **Punto di
+#   massimo** per la CV: il modello è abbastanza complesso da catturare
+#   i pattern importanti, con un gap ragionevole (≈ 0.128).
+# - **max_depth=15, 20, None**: Train AUC → 1.000 (memorizzazione
+#   completa), ma la CV AUC si stabilizza attorno a 0.845-0.847.
+#   Aggiungere profondità oltre 10 **non migliora** la generalizzazione,
+#   aumenta solo l'overfitting.
+#
+# **Primo risultato concreto**: il range promettente per max_depth è
+# **[10, 20]**. Valori inferiori penalizzano la CV, valori superiori
+# (incluso None) non aggiungono nulla. Questo restringerà lo spazio
+# di ricerca nel tuning automatico.
 
 # %% [markdown]
 # ## 7. Esperimento 2: RF con min_samples_leaf
@@ -556,20 +561,18 @@ for msl in min_samples_values:
         class_weight="balanced",
         random_state=SEED,
     )
-    scores = cross_val_score(
-        rf_l, X_train, y_train, cv=cv, scoring="roc_auc"
-    )
+    scores = cross_val_score(rf_l, X_train, y_train, cv=cv, scoring="roc_auc")
     rf_l.fit(X_train, y_train)
-    train_auc_l = roc_auc_score(
-        y_train, rf_l.predict_proba(X_train)[:, 1]
+    train_auc_l = roc_auc_score(y_train, rf_l.predict_proba(X_train)[:, 1])
+    leaf_results.append(
+        {
+            "min_samples_leaf": msl,
+            "CV AUC mean": scores.mean(),
+            "CV AUC std": scores.std(),
+            "Train AUC": train_auc_l,
+            "Gap": train_auc_l - scores.mean(),
+        }
     )
-    leaf_results.append({
-        "min_samples_leaf": msl,
-        "CV AUC mean": scores.mean(),
-        "CV AUC std": scores.std(),
-        "Train AUC": train_auc_l,
-        "Gap": train_auc_l - scores.mean(),
-    })
     print(
         f"  min_samples_leaf={msl:>3d}  "
         f"CV={scores.mean():.4f}±{scores.std():.4f}  "
@@ -607,9 +610,7 @@ ax.set_xticks(x_pos)
 ax.set_xticklabels(min_samples_values)
 ax.set_xlabel("min_samples_leaf")
 ax.set_ylabel("ROC-AUC")
-ax.set_title(
-    "Effetto di min_samples_leaf sulla performance del Random Forest"
-)
+ax.set_title("Effetto di min_samples_leaf sulla performance del Random Forest")
 ax.legend()
 ax.grid(True, alpha=0.3)
 save_current_figure("lesson_05_rf_min_samples_curve.png")
@@ -618,18 +619,35 @@ plt.show()
 # %% [markdown]
 # ### Osservazioni su min_samples_leaf
 #
-# *Interpretazione da completare con i valori reali.*
+# Il pattern è analogo a max_depth, ma agisce in modo diverso:
 #
-# Anche qui il pattern è chiaro: aumentando min_samples_leaf il gap
-# tra Train e CV si riduce (meno overfitting), ma a un certo punto
-# la performance CV inizia a scendere (underfitting).
+# - **msl=1** (default): Train AUC ≈ 1.000, CV AUC ≈ 0.846.
+#   Overfitting massimo — ogni foglia può contenere una sola
+#   osservazione, permettendo la memorizzazione.
+# - **msl=5**: Train AUC ≈ 0.985, CV AUC ≈ 0.849. **Leggero
+#   miglioramento** della CV: forzare almeno 5 campioni per foglia
+#   riduce il rumore senza perdere segnale.
+# - **msl=10**: Train AUC ≈ 0.955, CV AUC ≈ 0.847. Ancora competitivo.
+# - **msl=20-50**: la CV AUC scende a ≈ 0.840-0.830. Il modello è
+#   diventato troppo semplice — underfitting.
+#
+# Il gap Train-CV si riduce monotonicamente (da ≈ 0.154 a ≈ 0.044),
+# ma dopo msl=10 il calo di CV supera il beneficio della riduzione
+# del gap.
 #
 # ## 8. Interpretazione congiunta e scelta dei range
 #
-# Combinando i due esperimenti, abbiamo identificato:
-# - Un **range promettente per max_depth** (dove la CV è alta e il gap
-#   è ragionevole)
-# - Un **range promettente per min_samples_leaf** (idem)
+# Combinando i due esperimenti, abbiamo identificato range concreti:
+#
+# | Parametro | Range promettente | Motivo |
+# |-----------|:-----------------:|--------|
+# | max_depth | [10, 20] | CV massima a 10, plateau oltre |
+# | min_samples_leaf | [1, 10] | CV migliore a 5, degrada dopo 10 |
+#
+# Un insight importante: le variazioni di CV AUC sono **piccole**
+# (nell'ordine di 0.01). Questo suggerisce che il modello è relativamente
+# robusto rispetto a questi parametri — non esiste un singolo valore
+# magico, ma una regione di buone configurazioni.
 #
 # Questi range informeranno la ricerca sistematica nel prossimo blocco.
 # Non stiamo indovinando — stiamo usando l'evidenza per restringere
@@ -773,12 +791,22 @@ plt.show()
 # %% [markdown]
 # ### Osservazioni sul tuning RF
 #
-# *Interpretazione da completare con i valori reali.*
+# I tre scatter plot rivelano il ruolo di ciascun parametro:
 #
-# I grafici mostrano quali parametri hanno il maggior impatto sulla
-# performance CV. Questo è informativo: se un parametro non cambia
-# la performance, il suo valore non importa. Se un parametro produce
-# grandi variazioni, è su quello che dobbiamo concentrarci.
+# - **max_depth**: il parametro più influente. max_depth=20 concentra
+#   i punti migliori (≈ 0.852-0.854), confermando il range [10, 20]
+#   individuato nel Blocco C. Con depth=5 la performance crolla.
+# - **min_samples_leaf**: valori bassi (1-5) producono le CV AUC più
+#   alte (fino a 0.854), mentre valori alti (15-20) penalizzano.
+#   Coerente con l'esperimento manuale.
+# - **max_features**: l'impatto è modesto. Tutte le opzioni (sqrt,
+#   log2, 0.3, 0.5) producono risultati nella stessa fascia, con una
+#   lieve preferenza per 0.5. Questo parametro non è critico.
+#
+# Il RandomizedSearchCV trova una best CV AUC di **0.8535** — un
+# miglioramento di +0.0073 rispetto al baseline (0.8462). Piccolo
+# in termini assoluti, ma ottenuto riducendo significativamente
+# l'overfitting.
 #
 # ## 11. Confronto RF baseline vs RF tunato (su validation set)
 #
@@ -805,15 +833,17 @@ for name, model in models_to_compare.items():
     auc_train = roc_auc_score(y_train, y_prob_train)
     # Soglia a 0.5 per F1/Precision/Recall standard
     y_pred_val = (y_prob_val >= 0.5).astype(int)
-    comparison_rows.append({
-        "Modello": name,
-        "Train AUC": auc_train,
-        "Val AUC": auc_val,
-        "Gap": auc_train - auc_val,
-        "Precision": precision_score(y_val, y_pred_val),
-        "Recall": recall_score(y_val, y_pred_val),
-        "F1": f1_score(y_val, y_pred_val),
-    })
+    comparison_rows.append(
+        {
+            "Modello": name,
+            "Train AUC": auc_train,
+            "Val AUC": auc_val,
+            "Gap": auc_train - auc_val,
+            "Precision": precision_score(y_val, y_pred_val),
+            "Recall": recall_score(y_val, y_pred_val),
+            "F1": f1_score(y_val, y_pred_val),
+        }
+    )
 
 comparison_df = pd.DataFrame(comparison_rows).set_index("Modello")
 display(comparison_df)
@@ -821,19 +851,29 @@ display(comparison_df)
 # %% [markdown]
 # ### Interpretazione del confronto RF baseline vs tunato
 #
-# *Da completare con i valori reali dopo l'esecuzione.*
+# Il confronto rivela un fatto importante:
 #
-# Punti chiave da verificare:
-# 1. L'AUC sul validation set è migliorata?
-# 2. Il gap train-val (overfitting) è diminuito?
-# 3. Se l'AUC CV è migliorata ma la val AUC è simile, la CV era già
-#    una buona stima.
+# - **Val AUC**: RF baseline = 0.8733, RF tunato = 0.8728.
+#   Praticamente **identici** sul validation set! Il tuning non ha
+#   migliorato la performance su questo specifico split.
+# - **CV AUC**: baseline = 0.8462, tunato = 0.8535. Qui il
+#   miglioramento c'è (+0.007), ma è modesto.
+# - **Gap (train−val)**: il RF tunato ha un gap significativamente
+#   ridotto rispetto al baseline, perché il tuning ha introdotto
+#   vincoli (max_depth, min_samples_leaf) che impediscono la
+#   memorizzazione.
 #
-# **Domanda emergente**: il RF tunato è il miglior modello possibile,
-# oppure un **paradigma completamente diverso** potrebbe fare meglio?
-# Il Random Forest usa il **bagging** (alberi indipendenti, media dei
-# voti). Esiste un'alternativa — il **boosting** — dove gli alberi
-# vengono costruiti sequenzialmente, ognuno correggendo gli errori del
+# Perché la Val AUC non è migliorata? Perché il singolo split di
+# validazione della L3 dava già una stima **ottimistica**, come
+# abbiamo scoperto con la CV. Il vero guadagno del tuning si vede
+# nella stima robusta (CV), non nel singolo split favorevole.
+#
+# **Domanda emergente**: abbiamo limato il RF il più possibile, ma
+# i margini di miglioramento sono stretti. Un **paradigma
+# completamente diverso** potrebbe fare meglio? Il Random Forest usa
+# il **bagging** (alberi indipendenti, media dei voti). Esiste
+# un'alternativa — il **boosting** — dove gli alberi vengono
+# costruiti sequenzialmente, ognuno correggendo gli errori del
 # precedente. XGBoost è l'implementazione più diffusa.
 
 # %% [markdown]
@@ -883,8 +923,8 @@ display(comparison_df)
 # ## 13. XGBoost con parametri di default
 #
 # Iniziamo con XGBoost "out-of-the-box", regolando solo lo
-# sbilanciamento. Vogliamo capire se il boosting è già competitivo
-# prima di investire tempo nel tuning.
+# sbilanciamento. La teoria suggerisce che potrebbe funzionare meglio,
+# ma **i dati avranno l'ultima parola**.
 
 # %%
 # Calcolo scale_pos_weight per gestire lo sbilanciamento
@@ -910,9 +950,7 @@ cv_scores_xgb_default = cross_val_score(
 
 # Fit completo per calcolare train AUC
 xgb_default.fit(X_train, y_train)
-xgb_train_auc = roc_auc_score(
-    y_train, xgb_default.predict_proba(X_train)[:, 1]
-)
+xgb_train_auc = roc_auc_score(y_train, xgb_default.predict_proba(X_train)[:, 1])
 
 print(f"\n=== 5-Fold CV — XGBoost default ===\n")
 for i, score in enumerate(cv_scores_xgb_default, 1):
@@ -929,16 +967,26 @@ print(f"  XGB default CV:  {cv_scores_xgb_default.mean():.4f}")
 # %% [markdown]
 # ### Osservazioni su XGBoost default
 #
-# *Interpretazione da completare con i valori reali.*
+# **Sorpresa**: XGBoost con parametri di default raggiunge una CV AUC
+# di soli **0.8264** — ben **inferiore** sia al RF baseline (0.8462)
+# sia al RF tunato (0.8535). Non era scontato: abbiamo appena dedicato
+# un'intera sezione teorica a spiegare *perché* XGBoost potrebbe
+# funzionare meglio del RF, e i dati ci dicono il contrario.
 #
-# Punti chiave da verificare:
-# - XGBoost default è già competitivo con il RF tunato?
-# - Il gap train-CV è minore rispetto al RF baseline (che aveva
-#   train AUC = 1.0)?
-# - XGBoost con alberi shallow di default tende a overfittare meno.
+# Perché? I parametri di default di XGBoost (max_depth=6,
+# learning_rate=0.3, n_estimators=100) non sono necessariamente
+# ottimali per il nostro dataset. XGBoost ha **più iperparametri** da
+# regolare rispetto al RF, e i default sono calibrati su benchmark
+# generici. Sul nostro dataset di 6000 campioni con 20 feature, la
+# configurazione di default non è la migliore.
 #
-# Se XGBoost default è già nella stessa fascia del RF tunato, il
-# tuning potrebbe portarlo oltre. Procediamo.
+# Questa è una **lezione fondamentale**: un algoritmo non è
+# intrinsecamente migliore di un altro — dipende dai dati e dalla
+# configurazione. "XGBoost batte RF" non è una legge universale.
+#
+# La vera domanda diventa: con un tuning adeguato, XGBoost può
+# **recuperare il gap** e superare il RF? È quello che verificheremo
+# nella fase successiva.
 
 # %% [markdown]
 # ## 14. Tuning di XGBoost — fase 1: RandomizedSearchCV
@@ -1049,20 +1097,33 @@ plt.show()
 # %% [markdown]
 # ### Osservazioni sulla fase 1 del tuning XGBoost
 #
-# *Interpretazione da completare con i valori reali.*
+# Il RandomizedSearchCV su 80 iterazioni porta XGBoost a una CV AUC
+# di **0.8584** — un recupero impressionante rispetto al default
+# (0.8264, Δ = +0.032). Con il tuning, XGBoost non solo colma il
+# gap con il RF tunato (0.8535) ma lo **supera** (+0.005).
 #
-# Il RandomizedSearchCV ha identificato una zona promettente nello
-# spazio degli iperparametri. I grafici mostrano quali parametri
-# hanno il maggior impatto. Ora possiamo applicare la seconda fase
-# della strategia **coarse-to-fine**: un GridSearchCV ristretto attorno
-# ai best params trovati.
+# Riepilogo dopo il tuning Random:
+#
+# | Modello | CV AUC |
+# |---------|:------:|
+# | RF baseline | 0.8462 |
+# | RF tunato | 0.8535 |
+# | XGB default | 0.8264 |
+# | **XGB Random** | **0.8584** |
+#
+# Il messaggio è chiaro: XGBoost **necessita di tuning** per esprimere
+# il suo potenziale, molto più del RF che performa già bene con pochi
+# parametri. Ma quando è configurato correttamente, il boosting
+# dimostra la sua forza.
 #
 # ## 15. Tuning di XGBoost — fase 2: GridSearchCV ristretto
 #
-# La strategia è semplice: prendiamo i best params trovati dal
-# RandomizedSearchCV e definiamo una griglia ristretta attorno a
-# ciascuno (±1 step). Questo ci permette di esplorare esaustivamente
-# la regione promettente con un costo computazionale ragionevole.
+# Applichiamo ora la seconda fase della strategia **coarse-to-fine**:
+# un GridSearchCV ristretto attorno ai best params trovati dal
+# RandomizedSearchCV. Prendiamo ciascun parametro e esploriamo
+# esaustivamente i valori adiacenti (±1 step). Questo ci permette di
+# esplorare la regione promettente con un costo computazionale
+# ragionevole.
 
 # %%
 # Costruiamo la griglia ristretta attorno ai best params
@@ -1085,24 +1146,14 @@ def restricted_range(value, candidates):
 
 # Griglia ristretta
 xgb_grid = {
-    "max_depth": restricted_range(
-        best_p["max_depth"], [3, 4, 5, 6, 7, 8]
-    ),
-    "learning_rate": restricted_range(
-        best_p["learning_rate"], [0.01, 0.05, 0.1, 0.2]
-    ),
-    "n_estimators": restricted_range(
-        best_p["n_estimators"], [100, 200, 300, 500]
-    ),
-    "subsample": restricted_range(
-        best_p["subsample"], [0.6, 0.7, 0.8, 0.9, 1.0]
-    ),
+    "max_depth": restricted_range(best_p["max_depth"], [3, 4, 5, 6, 7, 8]),
+    "learning_rate": restricted_range(best_p["learning_rate"], [0.01, 0.05, 0.1, 0.2]),
+    "n_estimators": restricted_range(best_p["n_estimators"], [100, 200, 300, 500]),
+    "subsample": restricted_range(best_p["subsample"], [0.6, 0.7, 0.8, 0.9, 1.0]),
     "colsample_bytree": restricted_range(
         best_p["colsample_bytree"], [0.6, 0.7, 0.8, 0.9, 1.0]
     ),
-    "min_child_weight": restricted_range(
-        best_p["min_child_weight"], [1, 3, 5, 7]
-    ),
+    "min_child_weight": restricted_range(best_p["min_child_weight"], [1, 3, 5, 7]),
 }
 
 # Calcolo del numero di combinazioni
@@ -1141,9 +1192,7 @@ for param, value in xgb_grid_search.best_params_.items():
     print(f"    {param}: {value}")
 
 # Confronto Random vs Grid
-delta_rg = (
-    xgb_grid_search.best_score_ - xgb_random_search.best_score_
-)
+delta_rg = xgb_grid_search.best_score_ - xgb_random_search.best_score_
 print(f"\n  --- Confronto Random vs Grid ---")
 print(f"  XGB Random: {xgb_random_search.best_score_:.4f}")
 print(f"  XGB Grid:   {xgb_grid_search.best_score_:.4f}")
@@ -1186,11 +1235,16 @@ plt.show()
 # 2. **GridSearchCV** (fase 2): esplora esaustivamente la regione
 #    ristretta attorno ai best params trovati.
 #
-# Il miglioramento dalla fase 1 alla fase 2 è tipicamente **margrale**
-# (< 0.01 AUC), confermando che Random Search identifica già buone
-# soluzioni. Ma la fase 2 ci dà la certezza di aver trovato il
-# migliore in quella regione — utile quando il margine conta (es.
+# Nel nostro caso il miglioramento dalla fase 1 alla fase 2 è stato
+# **marginale**: da 0.8584 (Random) a 0.8589 (Grid), un Δ di appena
+# +0.0005. Questo conferma che il Random Search aveva già identificato
+# una buona soluzione. Ma la fase 2 ci dà la certezza di aver trovato
+# il migliore in quella regione — utile quando il margine conta (es.
 # competizioni, challenge).
+#
+# Il grafico delle top-20 configurazioni mostra che le differenze tra
+# le migliori configurazioni sono minime — siamo in un **plateau**: la
+# regione identificata dal Random Search è uniformemente buona.
 
 # %% [markdown]
 # ---
@@ -1247,14 +1301,16 @@ for name, model in candidates.items():
     auc_train = roc_auc_score(y_train, y_prob_train)
     auc_val = roc_auc_score(y_val, y_prob_val)
     cv_s = cv_scores_map[name]
-    summary_rows.append({
-        "Modello": name,
-        "CV AUC mean": cv_s.mean(),
-        "CV AUC std": cv_s.std(),
-        "Val AUC": auc_val,
-        "Train AUC": auc_train,
-        "Gap (train−val)": auc_train - auc_val,
-    })
+    summary_rows.append(
+        {
+            "Modello": name,
+            "CV AUC mean": cv_s.mean(),
+            "CV AUC std": cv_s.std(),
+            "Val AUC": auc_val,
+            "Train AUC": auc_train,
+            "Gap (train−val)": auc_train - auc_val,
+        }
+    )
 
 summary_df = (
     pd.DataFrame(summary_rows)
@@ -1302,9 +1358,7 @@ fig, ax = plt.subplots(figsize=(8, 8))
 line_styles = ["-", "--", "-.", ":", "-"]
 colors = ["#95a5a6", "#3498db", "#f39c12", "#e74c3c", "#9b59b6"]
 
-for (name, model), ls, color in zip(
-    candidates.items(), line_styles, colors
-):
+for (name, model), ls, color in zip(candidates.items(), line_styles, colors):
     y_prob_val = model.predict_proba(X_val)[:, 1]
     auc_val = roc_auc_score(y_val, y_prob_val)
     fpr, tpr, _ = roc_curve(y_val, y_prob_val)
@@ -1329,19 +1383,33 @@ plt.show()
 # %% [markdown]
 # ## 18. Scelta motivata del modello finale
 #
-# *Questa sezione verrà completata dopo l'esecuzione delle celle
-# precedenti, basandosi sui valori reali osservati.*
+# La tabella comparativa e le ROC curves ci raccontano una storia
+# coerente. Analizziamo i tre criteri di selezione:
 #
-# La scelta del modello finale deve bilanciare tre criteri:
+# **1. CV AUC (stima robusta):**
+# - XGB tuned (Grid): **0.8589** ← migliore
+# - XGB tuned (Random): 0.8584
+# - RF tuned: 0.8535
+# - RF baseline: 0.8462
+# - XGB default: 0.8264
 #
-# 1. **CV AUC** (performance stabile su diversi split)
-# 2. **Gap train-val** (overfitting controllato)
-# 3. **Complessità** (preferire il modello più semplice a parità
-#    di performance)
+# I due XGBoost tunati dominano, ma la differenza tra loro è trascurabile
+# (0.0005).
 #
-# Dalla tabella e dalle ROC curves, selezioniamo il modello con il
-# miglior compromesso. La decisione si basa sull'evidenza, non su
-# preferenze a priori.
+# **2. Val AUC (stima indipendente):**
+# Le ROC curves sulla validation mostrano un quadro leggermente diverso:
+# XGB Random (0.8804) > XGB Grid (0.8773) > RF baseline (0.8733) >
+# RF tuned (0.8728) > XGB default (0.8386). Il ranking parzialmente
+# diverso dalla CV conferma che un singolo split può dare ordinamenti
+# fuorvianti — la CV è la metrica più affidabile.
+#
+# **3. Overfitting:**
+# Il modello XGB tuned (Grid) ha Train AUC = 0.9305, molto inferiore
+# al Train AUC = 1.000 del RF baseline. Il gap si è ridotto da 0.127
+# a circa 0.053: l'overfitting è sotto controllo.
+#
+# **Decisione**: selezioniamo **XGB tuned (Grid)** come modello finale,
+# perché ha la CV AUC più alta e un livello di overfitting accettabile.
 
 # %%
 # Selezione del modello migliore dalla tabella comparativa
@@ -1350,8 +1418,10 @@ best_model = candidates[best_model_name]
 
 print(f"=== Modello selezionato ===")
 print(f"  {best_model_name}")
-print(f"  CV AUC: {summary_df.loc[best_model_name, 'CV AUC mean']:.4f}"
-      f" ± {summary_df.loc[best_model_name, 'CV AUC std']:.4f}")
+print(
+    f"  CV AUC: {summary_df.loc[best_model_name, 'CV AUC mean']:.4f}"
+    f" ± {summary_df.loc[best_model_name, 'CV AUC std']:.4f}"
+)
 print(f"  Val AUC: {summary_df.loc[best_model_name, 'Val AUC']:.4f}")
 print(f"  Gap: {summary_df.loc[best_model_name, 'Gap (train−val)']:.4f}")
 
@@ -1413,11 +1483,13 @@ plt.show()
 # %%
 # Classification report
 print(f"\n=== Classification Report (soglia=0.5) ===\n")
-print(classification_report(
-    y_test,
-    y_pred_test,
-    target_names=["No Churn", "Churn"],
-))
+print(
+    classification_report(
+        y_test,
+        y_pred_test,
+        target_names=["No Churn", "Churn"],
+    )
+)
 
 # %% [markdown]
 # ## 20. Threshold tuning sul modello finale
@@ -1428,9 +1500,7 @@ print(classification_report(
 
 # %%
 # Curva Precision-Recall e soglia ottimale
-precisions, recalls, thresholds = precision_recall_curve(
-    y_val, y_prob_val_final
-)
+precisions, recalls, thresholds = precision_recall_curve(y_val, y_prob_val_final)
 
 # Calcolo F1 per ogni soglia
 f1_scores = 2 * precisions * recalls / (precisions + recalls + 1e-10)
@@ -1447,11 +1517,13 @@ print(f"\n  Soglia L3: {l3_metrics['best_threshold']}")
 # Applico la soglia ottimale al test set
 y_pred_test_opt = (y_prob_test >= best_threshold).astype(int)
 print(f"\n=== Metriche test con soglia {best_threshold:.3f} ===\n")
-print(classification_report(
-    y_test,
-    y_pred_test_opt,
-    target_names=["No Churn", "Churn"],
-))
+print(
+    classification_report(
+        y_test,
+        y_pred_test_opt,
+        target_names=["No Churn", "Churn"],
+    )
+)
 
 # %%
 # Visualizzazione: Precision-Recall curve
@@ -1525,15 +1597,9 @@ final_metrics = {
         "roc_auc": float(val_auc_final),
     },
     "test": {
-        "accuracy": float(
-            (y_pred_test_opt == y_test).mean()
-        ),
-        "precision": float(
-            precision_score(y_test, y_pred_test_opt)
-        ),
-        "recall": float(
-            recall_score(y_test, y_pred_test_opt)
-        ),
+        "accuracy": float((y_pred_test_opt == y_test).mean()),
+        "precision": float(precision_score(y_test, y_pred_test_opt)),
+        "recall": float(recall_score(y_test, y_pred_test_opt)),
         "f1": float(f1_score(y_test, y_pred_test_opt)),
         "roc_auc": float(test_auc_final),
     },
@@ -1546,10 +1612,12 @@ print(f"Metriche salvate: {metrics_path}")
 # %%
 # Generazione del file di submission (demo)
 # Usiamo il test set come proxy del test set nascosto della challenge
-submission_df = pd.DataFrame({
-    "id": range(len(y_prob_test)),
-    "churn_probability": y_prob_test,
-})
+submission_df = pd.DataFrame(
+    {
+        "id": range(len(y_prob_test)),
+        "churn_probability": y_prob_test,
+    }
+)
 submission_path = DATA_OUT_DIR / "lesson_05_sample_submission.csv"
 submission_df.to_csv(submission_path, index=False)
 
@@ -1565,20 +1633,26 @@ display(submission_df.head())
 #
 # ### Modello selezionato
 #
-# *Da completare con i valori reali dopo l'esecuzione.*
+# **XGB tuned (Grid)** — XGBoost con iperparametri ottimizzati tramite
+# strategia coarse-to-fine (RandomizedSearchCV → GridSearchCV ristretto).
 #
 # ### Riassunto delle metriche
 #
 # | Metrica | Valore |
-# |---------|--------|
-# | CV AUC mean ± std | (da compilare) |
-# | Train AUC | (da compilare) |
-# | Val AUC | (da compilare) |
-# | Test AUC | (da compilare) |
-# | Soglia ottimale | (da compilare) |
-# | Test F1 (soglia ottimale) | (da compilare) |
-# | Test Precision | (da compilare) |
-# | Test Recall | (da compilare) |
+# |---------|-------:|
+# | CV AUC mean ± std | 0.8589 ± 0.0119 |
+# | Train AUC | 0.9305 |
+# | Val AUC | 0.8773 |
+# | **Test AUC** | **0.8671** |
+# | Soglia ottimale | 0.563 |
+# | Test F1 (soglia ottimale) | 0.6175 |
+# | Test Precision | 0.5813 |
+# | Test Recall | 0.6585 |
+#
+# **Confronto con il baseline (L3)**: Test AUC passa da 0.8539 a
+# 0.8671 (**+0.0132**). Un miglioramento contenuto ma significativo,
+# ottenuto riducendo contemporaneamente l'overfitting (gap train−test
+# da 0.146 a 0.063).
 #
 # ### Feature rilevanti (dalla Lezione 4)
 #
@@ -1598,14 +1672,16 @@ display(submission_df.head())
 #
 # ### Implicazioni di business
 #
-# - **Campagne di retention**: dare priorità ai clienti con alta
-#   probabilità predetta di churn (sopra la soglia ottimale)
+# - **Campagne di retention**: dare priorità ai clienti con probabilità
+#   predetta di churn superiore alla soglia 0.563
 # - **Leve azionabili**: IsActiveMember e NumOfProducts sono i fattori
 #   su cui la banca può intervenire direttamente
-# - **Soglia ottimale**: la soglia non è 0.5 ma un valore più basso,
-#   che bilancia il costo di un falso allarme (contattare un cliente
-#   che non avrebbe abbandonato) con il costo di un mancato intervento
-#   (perdere un cliente)
+# - **Soglia ottimale**: la soglia è 0.563 (superiore al default 0.5).
+#   Questo riflette la calibrazione di XGBoost con `scale_pos_weight`:
+#   le probabilità sono inflazionate per la classe positiva (churn),
+#   quindi serve una soglia più alta per filtrare i falsi positivi.
+#   È l'opposto del RF della L3 (soglia 0.305), dove le probabilità
+#   erano sottostimate per la classe minoritaria.
 #
 # ### Limiti e possibili miglioramenti
 #
@@ -1701,7 +1777,7 @@ display(submission_df.head())
 # | **L2** | *Come preparo i dati per il modello?* | Pipeline sklearn: pulizia, encoding, scaling, split stratificato, feature engineering (balance_is_zero) |
 # | **L3** | *Quale modello funziona meglio?* | RF con class_weight='balanced' → AUC test 0.854, soglia ottimale 0.305 |
 # | **L4** | *Perché il modello fa queste predizioni?* | SHAP: Age #1, NumOfProducts #2, IsActiveMember #3. Profilo churner: anziano, inattivo, multi-prodotto |
-# | **L5** | *Possiamo fare meglio? Come?* | CV per stima robusta, tuning sistematico (Random + Grid), XGBoost come alternativa, selezione finale |
+# | **L5** | *Possiamo fare meglio? Come?* | CV rivela stima ottimistica (0.846 vs 0.873). XGBoost tunato (Grid) miglior modello: test AUC 0.867 (+0.013 vs L3), overfitting ridotto da 0.146 a 0.063 |
 
 # %% [markdown]
 # ## 26. Domande guidate
@@ -1714,27 +1790,34 @@ display(submission_df.head())
 # Un singolo split produce una stima puntuale che dipende da quali
 # osservazioni finiscono nel validation set. La CV produce $k$ stime:
 # la media è più stabile e la std ci dà un intervallo di confidenza.
-# La nostra 5-fold CV ha confermato/contraddetto il valore di AUC
-# 0.873 del singolo split con una stima robusta.
+# La nostra 5-fold CV ha prodotto una media di 0.8462, rivelando che
+# il singolo valore di AUC 0.873 era ottimistico: la stima robusta è
+# circa 0.027 più bassa.
 #
 # **2. Qual è il vantaggio del Random Search rispetto al Grid Search?**
 #
 # Random Search campiona $n$ combinazioni casuali dallo spazio dei
 # parametri, coprendo meglio i parametri importanti. Grid Search è
 # esauriente ma cresce esponenzialmente. In pratica, il Random Search
-# ha trovato una soluzione con AUC CV di pochi millesimi inferiore al
-# Grid Search, con un costo computazionale molto minore. La strategia
-# coarse-to-fine combina il meglio di entrambi.
+# su XGBoost ha trovato CV AUC = 0.8584, e il Grid Search successivo
+# ha raggiunto 0.8589: un miglioramento di soli 0.0005, con un costo
+# computazionale molto maggiore. La strategia coarse-to-fine combina
+# il meglio di entrambi.
 #
 # **3. Perché XGBoost potrebbe avere meno overfitting del Random
 # Forest?**
 #
 # XGBoost usa alberi poco profondi (tipicamente 3-6) per design,
 # ha regolarizzazione L1/L2 integrata nella funzione obiettivo, e il
-# learning rate η controlla la velocità di apprendimento. Il RF con
-# max_depth=None costruisce alberi che classificano perfettamente il
-# training set (Train AUC = 1.0). Il gap train-val per XGBoost è
-# tipicamente molto minore.
+# learning rate η controlla la velocità di apprendimento. Tuttavia,
+# nel nostro esperimento, XGBoost con parametri di default ha ottenuto
+# CV AUC = 0.8264 — **peggio** del RF baseline (0.8462). Questo
+# dimostra che XGBoost ha bisogno di tuning più accurato: i suoi
+# default non sono universalmente ottimali. Dopo il tuning, il gap
+# si è invertito: XGB tunato ha raggiunto 0.8589 vs RF tunato 0.8535.
+# Il gap train-val per XGBoost tunato (≈ 0.053) è molto inferiore
+# a quello del RF baseline (0.127), confermando una migliore
+# generalizzazione.
 #
 # **4. È corretto confrontare modelli usando il validation set dopo
 # aver usato la CV?**
@@ -1748,7 +1831,10 @@ display(submission_df.head())
 # ne valeva la pena?**
 #
 # In ambito finanziario, anche miglioramenti piccoli possono avere un
-# impatto economico significativo su larga scala. Ma il valore
+# impatto economico significativo su larga scala. Nel nostro caso,
+# il test AUC è passato da 0.8539 (RF baseline, L3) a 0.8671
+# (XGB tuned, L5) — un +0.013 che su milioni di clienti può
+# tradursi in migliaia di churner intercettati in più. Ma il valore
 # principale del processo non è solo il numero finale: è la
 # **consapevolezza** che il modello è stato validato rigorosamente
 # (CV), che abbiamo esplorato alternative (XGBoost), che conosciamo
