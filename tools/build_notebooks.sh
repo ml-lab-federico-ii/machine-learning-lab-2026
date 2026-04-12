@@ -5,14 +5,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NOTEBOOKS_DIR="${PROJECT_ROOT}/notebooks"
 FORCE_ALL=false
+INPUT_FILE=""
 
 usage() {
   cat <<'EOF'
-Uso: ./build_notebooks.sh [--all] [--notebooks-dir <path>]
+Uso: ./build_notebooks.sh [--all] [--notebooks-dir <path>] [--file <file.py>] [<file.py>]
 
 Opzioni:
   --all                    Converte tutti i file .py trovati.
   --notebooks-dir <path>   Directory da cui cercare i file .py (default: ../notebooks).
+  --file <file.py>         Converte un singolo file .py in .ipynb.
+  <file.py>                Argomento posizionale: converte un singolo file .py in .ipynb.
   -h, --help               Mostra questo messaggio.
 
 Comportamento di default:
@@ -36,9 +39,22 @@ while [[ $# -gt 0 ]]; do
       NOTEBOOKS_DIR="$2"
       shift 2
       ;;
+    --file)
+      if [[ $# -lt 2 ]]; then
+        echo "Errore: --file richiede un percorso a un file .py." >&2
+        usage
+        exit 1
+      fi
+      INPUT_FILE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
+      ;;
+    *.py)
+      INPUT_FILE="$1"
+      shift
       ;;
     *)
       echo "Errore: opzione non riconosciuta: $1" >&2
@@ -112,13 +128,7 @@ run_jupytext() {
   "${JUPYTEXT_RUNNER[@]}" "$@"
 }
 
-if [[ ! -d "${NOTEBOOKS_DIR}" ]]; then
-  echo "Errore: directory notebooks non trovata in ${NOTEBOOKS_DIR}" >&2
-  exit 1
-fi
-
 set_jupytext_runner
-echo "Directory notebook: ${NOTEBOOKS_DIR}"
 echo "Runner jupytext: ${JUPYTEXT_RUNNER[*]}"
 
 converted=0
@@ -126,7 +136,8 @@ skipped=0
 failed=0
 found=0
 
-while IFS= read -r -d '' py_file; do
+convert_file() {
+  local py_file="$1"
   found=$((found + 1))
   if [[ "${FORCE_ALL}" == true ]] || is_percent_notebook_source "${py_file}"; then
     ipynb_file="${py_file%.py}.ipynb"
@@ -140,7 +151,29 @@ while IFS= read -r -d '' py_file; do
   else
     skipped=$((skipped + 1))
   fi
-done < <(find "${NOTEBOOKS_DIR}" -type f -name "*.py" -print0)
+}
+
+if [[ -n "${INPUT_FILE}" ]]; then
+  if [[ ! -f "${INPUT_FILE}" ]]; then
+    echo "Errore: file non trovato: ${INPUT_FILE}" >&2
+    exit 1
+  fi
+  if [[ "${INPUT_FILE}" != *.py ]]; then
+    echo "Errore: il file deve avere estensione .py: ${INPUT_FILE}" >&2
+    exit 1
+  fi
+  echo "File singolo: ${INPUT_FILE}"
+  convert_file "${INPUT_FILE}"
+else
+  if [[ ! -d "${NOTEBOOKS_DIR}" ]]; then
+    echo "Errore: directory notebooks non trovata in ${NOTEBOOKS_DIR}" >&2
+    exit 1
+  fi
+  echo "Directory notebook: ${NOTEBOOKS_DIR}"
+  while IFS= read -r -d '' py_file; do
+    convert_file "${py_file}"
+  done < <(find "${NOTEBOOKS_DIR}" -type f -name "*.py" -print0)
+fi
 
 echo "Conversione completata."
 echo "File .py trovati: ${found}"
