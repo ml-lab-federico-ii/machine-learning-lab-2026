@@ -13,6 +13,9 @@
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python3.11",
         "workbench.iconTheme": "vscode-icons",
+        "workbench.startupEditor": "none",
+        "workbench.welcomePage.walkthroughs.openOnInstall": false,
+        "workbench.tips.enabled": false,
         "jupyter.kernels.filter": [
           {"path": "/usr/bin/python3", "type": "pythonEnvironment"}
         ]
