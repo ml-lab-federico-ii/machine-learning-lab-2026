@@ -8,8 +8,8 @@
 # - Pietro Soglia
 #
 # **Emails:**
-# - enrico.huber@gmail.com
-# - pietro.soglia@gmail.com
+# - enrico.huber@bip-group.com
+# - pietro.soglia@bip-group.com
 #
 # **Last updated:** 2026-03-16
 #

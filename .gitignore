@@ -36,6 +36,18 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Internal folders
+# NOTE: challenge will be removed later
+docs/
+syllabus/
+tools/
+challenge/
+.github/instructions/
+.github/prompts/
+.github/skills/
+.github/copilot-instructions.md
+
+
 # Unit test / coverage reports
 htmlcov/
 .tox/

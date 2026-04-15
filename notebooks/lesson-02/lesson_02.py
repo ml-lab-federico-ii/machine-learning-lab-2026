@@ -8,8 +8,8 @@
 # - Pietro Soglia
 #
 # **Emails:**
-# - TODO: inserire email
-# - TODO: inserire email
+# - enrico.huber@bip-group.com
+# - pietro.soglia@bip-group.com
 #
 # **Last updated:** 2026-03-12
 #

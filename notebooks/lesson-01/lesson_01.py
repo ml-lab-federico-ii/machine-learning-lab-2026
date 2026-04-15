@@ -8,8 +8,8 @@
 # - Pietro Soglia
 #
 # **Emails:**
-# - enrico.huber@gmail.com
-# - pietro.soglia@gmail.com
+# - enrico.huber@bip-group.com
+# - pietro.soglia@bip-group.com
 #
 # **Last updated:** 2026-03-05
 #
@@ -891,7 +891,8 @@ RocCurveDisplay.from_estimator(
     name=f"Logistic Regression (AUC = {lr_auc:.3f})",
 )
 ax.plot(
-    [0, 1], [0, 1],
+    [0, 1],
+    [0, 1],
     linestyle="--",
     color="gray",
     label="Classificatore casuale (AUC = 0.500)",
