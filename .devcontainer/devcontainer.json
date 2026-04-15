@@ -11,7 +11,8 @@
         "vscode-icons-team.vscode-icons"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python3.11"
+        "python.defaultInterpreterPath": "/usr/local/bin/python3.11",
+        "workbench.iconTheme": "vscode-icons"
       }
     }
   }
