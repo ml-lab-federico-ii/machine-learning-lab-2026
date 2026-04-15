@@ -1,25 +1,5 @@
 {
   "name": "machine-learning-lab-2026",
   "image": "mcr.microsoft.com/devcontainers/python:3.11",
-  "postCreateCommand": "python3.11 -m pip install -r requirements.txt && python3.11 -m ipykernel install --user --name python3 --display-name 'Python 3.11'",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "ms-python.python",
-        "ms-toolsai.jupyter",
-        "mechatroner.rainbow-csv",
-        "vscode-icons-team.vscode-icons"
-      ],
-      "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python3.11",
-        "workbench.iconTheme": "vscode-icons",
-        "workbench.startupEditor": "none",
-        "workbench.welcomePage.walkthroughs.openOnInstall": false,
-        "workbench.tips.enabled": false,
-        "jupyter.kernels.filter": [
-          {"path": "/usr/bin/python3", "type": "pythonEnvironment"}
-        ]
-      }
-    }
-  }
+  "postCreateCommand": "python3.11 -m pip install -r requirements.txt && python3.11 -m ipykernel install --user --name python3 --display-name 'Python 3.11'"
 }
