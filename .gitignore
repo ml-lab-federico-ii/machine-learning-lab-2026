@@ -42,6 +42,11 @@ docs/
 syllabus/
 tools/
 challenge/
+.github/instructions/
+.github/prompts/
+.github/skills/
+.github/copilot-instructions.md
+
 
 # Unit test / coverage reports
 htmlcov/
