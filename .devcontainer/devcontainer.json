@@ -1,13 +1,18 @@
 {
   "name": "machine-learning-lab-2026",
   "image": "mcr.microsoft.com/devcontainers/python:3.11",
-  "postCreateCommand": "pip install -r requirements.txt",
+  "postCreateCommand": "python3.11 -m pip install -r requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-toolsai.jupyter"
-      ]
+        "ms-toolsai.jupyter",
+        "mechatroner.rainbow-csv",
+        "vscode-icons-team.vscode-icons"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python3.11"
+      }
     }
   }
 }
