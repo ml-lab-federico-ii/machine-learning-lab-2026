@@ -12,7 +12,10 @@
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python3.11",
-        "workbench.iconTheme": "vscode-icons"
+        "workbench.iconTheme": "vscode-icons",
+        "jupyter.kernels.filter": [
+          {"path": "/usr/bin/python3", "type": "pythonEnvironment"}
+        ]
       }
     }
   }
