@@ -36,6 +36,13 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Internal folders
+# NOTE: challenge will be removed later
+docs/
+syllabus/
+tools/
+challenge/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
