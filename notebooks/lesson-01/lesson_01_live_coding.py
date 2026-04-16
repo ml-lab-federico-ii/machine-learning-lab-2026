@@ -7,10 +7,6 @@
 # - Enrico Huber
 # - Pietro Soglia
 #
-# **Emails:**
-# - enrico.huber@bip-group.com
-# - pietro.soglia@bip-group.com
-#
 # **Last updated:** 2026-03-05
 #
 # ## Obiettivi di apprendimento

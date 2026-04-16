@@ -36,6 +36,9 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Python source files (notebooks as Jupytext scripts)
+*.py
+
 # Internal folders
 # NOTE: challenge will be removed later
 docs/
