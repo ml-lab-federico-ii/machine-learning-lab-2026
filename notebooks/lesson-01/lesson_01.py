@@ -7,10 +7,6 @@
 # - Enrico Huber
 # - Pietro Soglia
 #
-# **Emails:**
-# - enrico.huber@gmail.com
-# - pietro.soglia@gmail.com
-#
 # **Last updated:** 2026-03-05
 #
 # ## Obiettivi di apprendimento
@@ -237,6 +233,15 @@ display(df.describe(include=[np.number]).T)
 # %%
 TARGET = "Exited"
 
+# Colonne con dtype numerico che sono semanticamente categoriche (binarie / ordinali a bassa cardinalità).
+# Verranno trattate come categoriche nell'EDA e nel preprocessing (OHE invece di scaling).
+NUMERIC_AS_CATEGORICAL = {
+    "IsActiveMember",
+    "HasCrCard",
+    "NumOfProducts",
+    "Satisfaction Score",
+}
+
 target_counts = df[TARGET].value_counts().sort_index()
 target_rates = df[TARGET].value_counts(normalize=True).sort_index()
 
@@ -292,7 +297,7 @@ print("\nColonne identificative candidate:", id_cols)
 
 # %%
 num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-num_cols = [c for c in num_cols if c != TARGET]
+num_cols = [c for c in num_cols if c != TARGET and c not in NUMERIC_AS_CATEGORICAL]
 
 age_quantiles = df.groupby(TARGET)["Age"].quantile([0.25, 0.5, 0.75]).unstack()
 
@@ -485,7 +490,7 @@ for c in df.columns:
         continue
     if c in {"RowNumber", "CustomerId", "Surname"}:
         continue
-    if not is_numeric_dtype(df[c]):
+    if not is_numeric_dtype(df[c]) or c in NUMERIC_AS_CATEGORICAL:
         cat_cols.append(c)
 
 print("Colonne categoriche candidate:", cat_cols)
@@ -698,7 +703,11 @@ plt.show()
 # e di avere un quadro sintetico delle associazioni lineari con il target `Exited`.
 
 # %%
-num_all = df.select_dtypes(include=[np.number]).columns.tolist()
+num_all = [
+    c
+    for c in df.select_dtypes(include=[np.number]).columns
+    if c not in NUMERIC_AS_CATEGORICAL
+]
 
 corr_matrix = df[num_all].corr(numeric_only=True)
 
@@ -758,15 +767,19 @@ plt.show()
 # %% [markdown]
 # ### Interpretazione — Correlazioni
 #
-# - **`Complain` vs `Exited`**: correlazione di Pearson pari a **0.996** — quasi
+# - **`Complain` vs `Exited`**: correlazione di Pearson pari a **1.00** — quasi
 #   perfetta. Segnale di leakage (analisi dettagliata nella prossima sezione).
-# - Tra le feature *reali*, il predittore più correlato è **Age** ($r = 0.285$),
-#   seguito da **IsActiveMember** ($r = -0.156$) e **Balance** ($r = 0.119$).
-# - Le correlazioni *tra* feature numeriche sono in genere basse (|r| < 0.1):
+# - La matrice include solo le feature **numeriche continue** (le variabili
+#   semanticamente categoriche — `IsActiveMember`, `HasCrCard`, `NumOfProducts`,
+#   `Satisfaction Score` — sono escluse perché la correlazione di Pearson non è
+#   una misura appropriata per variabili binarie/ordinali a bassa cardinalità).
+# - Tra le feature continue, il predittore più correlato è **Age** ($r = 0.29$),
+#   seguito da **Balance** ($r = 0.12$).
+# - Le correlazioni *tra* feature numeriche sono in genere basse ($|r| < 0.1$):
 #   non si identificano ridondanze severe che richiedano eliminazione.
-# - `CreditScore`, `Tenure`, `EstimatedSalary`, `HasCrCard`, `Satisfaction Score`
-#   e `Point Earned` mostrano correlazioni quasi nulle con il target (<|0.03|) —
-#   ma questo non esclude effetti non lineari o di interazione.
+# - `CreditScore`, `Tenure`, `EstimatedSalary` e `Point Earned` mostrano
+#   correlazioni quasi nulle con il target ($|r| < 0.03$) — ma questo non
+#   esclude effetti non lineari o di interazione.
 
 # %% [markdown]
 # ## 11. Attenzione al leakage: il caso `Complain`
@@ -833,7 +846,11 @@ X = df[feature_cols_model]
 y_target = df[TARGET]
 
 # Encoding one-hot delle categoriche (per la baseline; Pipeline completa in Lezione 2)
-cat_model_cols = [c for c in feature_cols_model if not is_numeric_dtype(df[c])]
+cat_model_cols = [
+    c
+    for c in feature_cols_model
+    if not is_numeric_dtype(df[c]) or c in NUMERIC_AS_CATEGORICAL
+]
 X_encoded = pd.get_dummies(X, columns=cat_model_cols, drop_first=True)
 
 # Split stratificato
@@ -891,7 +908,8 @@ RocCurveDisplay.from_estimator(
     name=f"Logistic Regression (AUC = {lr_auc:.3f})",
 )
 ax.plot(
-    [0, 1], [0, 1],
+    [0, 1],
+    [0, 1],
     linestyle="--",
     color="gray",
     label="Classificatore casuale (AUC = 0.500)",
@@ -913,14 +931,14 @@ print(
 #
 # - **DummyClassifier** (predice sempre "Rimasto"): ROC-AUC = **0.50** — performance
 #   casuale, come atteso da un classificatore ignaro del segnale.
-# - **Logistic Regression baseline**: ROC-AUC ≈ **0.77** con preprocessing minimale
-#   (mediana + StandardScaler + one-hot encoding rudimentale). Questo è il nostro
+# - **Logistic Regression baseline**: ROC-AUC ≈ **0.85** con preprocessing minimale
+#   (mediana + StandardScaler + one-hot encoding). Questo è il nostro
 #   punto di riferimento per le lezioni successive.
 # - La **ROC Curve** visualizza il trade-off tra True Positive Rate e False Positive Rate
-#   al variare della soglia: a AUC=0.77, il modello discrimina significativamente
-#   meglio del caso (AUC=0.50), ma rimane ampio margine di miglioramento.
+#   al variare della soglia: a AUC=0.85, il modello discrimina significativamente
+#   meglio del caso (AUC=0.50), ma rimane margine di miglioramento.
 # - La **confusion matrix** rivela il punto critico: su **408 churner reali** nel test set,
-#   il modello ne identifica solo **86** (recall = **21.1%**), mentre ne manca **322**.
+#   il modello ne identifica solo **151** (recall = **37%**), mentre ne manca **257**.
 #   Questo avviene perché con la soglia di default (0.5) e un dataset sbilanciato,
 #   il modello tende a predire "Rimasto"; abbassare la soglia migliora il recall a
 #   scapito della precisione.
@@ -942,25 +960,25 @@ print(
 #
 # | Feature | Osservazione | $r$ Pearson |
 # |---------|-------------|-------------|
-# | `Age` | Mediana 45 (churn) vs 36 (non churn); picco di churn ~51% per fascia 45–55 | +0.285 |
-# | `IsActiveMember` | Churn rate 26.87% (inattivi) vs 14.27% (attivi) | −0.156 |
-# | `Balance` | Saldo zero → churn 14%; saldo positivo → churn 24%; distribuzione bimodale | +0.119 |
+# | `Age` | Mediana 45 (churn) vs 36 (non churn); picco di churn ~51% per fascia 45–55 | +0.29 |
+# | `IsActiveMember` | Churn rate 26.87% (inattivi) vs 14.27% (attivi) | (categorica) |
+# | `Balance` | Saldo zero → churn 14%; saldo positivo → churn 24%; distribuzione bimodale | +0.12 |
 # | `Geography` | Germania 32.4% vs Francia/Spagna ~16% | (categorica) |
 # | `Gender` | Femmine 25.1% vs Maschi 16.5% | (categorica) |
 # | `NumOfProducts` | Pattern non lineare: picco paradossale per 3–4 prodotti | (categorica) |
 #
 # **Feature a basso segnale (rumore):**
 # - `EstimatedSalary`, `Satisfaction Score`, `HasCrCard`, `CreditScore`, `Tenure`,
-#   `Point Earned` mostrano correlazioni quasi nulle con il target (<|0.03|) e
-#   distribuzioni praticamente identiche tra le classi.
+#   `Point Earned` mostrano distribuzioni praticamente identiche tra le classi
+#   e/o churn rate quasi invariante per gruppo.
 #
 # **Leakage confermato:**
 # - **`Complain` è leakage** (corr. 0.996): P(Exited=1 | Complain=1) = **99.51%**;
 #   da escludere da tutte le analisi predittive.
 #
 # **Baseline:**
-# - **Logistic Regression**: ROC-AUC ≈ **0.77**, ma recall sulla classe churn = **21.1%**
-#   (86/408 churner identificati). La soglia di default (0.5) è inadeguata per
+# - **Logistic Regression**: ROC-AUC ≈ **0.85**, ma recall sulla classe churn = **37%**
+#   (151/408 churner identificati). La soglia di default (0.5) è inadeguata per
 #   dataset sbilanciati: la ROC Curve guiderà la scelta della soglia ottimale.
 #
 # ### Azioni per la Lezione 2
@@ -973,4 +991,4 @@ print(
 # | Creare feature `balance_is_zero` | Catturare la bimodalità di `Balance` |
 # | Split train/val/test definitivo con `stratify=y` | Preservare distribuzione del target |
 # | Valutare `Satisfaction Score` e `Point Earned` | Segnale quasi nullo, possibile eliminazione |
-# | Ottimizzare la soglia di classificazione | Recall attuale (21%) troppo basso per uso operativo |
+# | Ottimizzare la soglia di classificazione | Recall attuale (37%) ancora basso per uso operativo |
