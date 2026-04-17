@@ -656,33 +656,18 @@ plt.show()
 # e di avere un quadro sintetico delle associazioni lineari con il target `Exited`.
 
 # %%
-num_all = df.select_dtypes(include=[np.number]).columns.tolist()
+# TODO(LIVE): calcolare la matrice di correlazione di Pearson per tutte le feature numeriche (escluso CustomerId e RowNumber) e visualizzarla con sns.heatmap
+# Hint: usa df.select_dtypes(include=[np.number]) per le colonne numeriche; salva in corr_matrix; visualizza con sns.heatmap(annot=True, fmt=".2f", cmap="RdBu_r")
 
-corr_matrix = df[num_all].corr(numeric_only=True)
-
-fig, ax = plt.subplots(figsize=(11, 9))
-mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
-sns.heatmap(
-    corr_matrix,
-    mask=mask,
-    annot=True,
-    fmt=".2f",
-    cmap="RdBu_r",
-    center=0,
-    vmin=-1,
-    vmax=1,
-    linewidths=0.5,
-    ax=ax,
-)
-ax.set_title(
-    "Matrice di correlazione (Pearson) — feature numeriche + target", fontsize=13
-)
 save_current_figure("lesson_01_corr_heatmap.png")
 plt.show()
 
 # %%
-# TODO(LIVE): estrarre la correlazione di ogni feature con il target, ordinata per valore assoluto
-# Hint: usa corr_matrix[TARGET].drop(TARGET).sort_values(key=abs, ascending=False); stampa il risultato con .to_string()
+corr_with_target = (
+    corr_matrix[TARGET].drop(TARGET).sort_values(key=abs, ascending=False)
+)
+print("Correlazione (Pearson) con Exited — ordinata per |r|:")
+print(corr_with_target.to_string())
 
 # %% [markdown]
 # ### Ranking visivo delle correlazioni (escl. leakage)
@@ -808,52 +793,21 @@ dummy_auc = roc_auc_score(y_test, dummy.predict_proba(X_test)[:, 1])
 print(f"DummyClassifier ROC-AUC: {dummy_auc:.4f}")
 
 # %%
-# TODO(LIVE): costruire una Pipeline sklearn con SimpleImputer, StandardScaler e LogisticRegression; addestrarla e calcolare la ROC-AUC sul test set
-# Hint: usa SimpleImputer(strategy="median"), StandardScaler(), LogisticRegression(max_iter=1000, random_state=SEED); salva il risultato in lr_auc
+# Baseline B — Logistic Regression con imputazione e scaling (Pipeline)
+lr_pipe = Pipeline(
+    [
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(max_iter=1000, random_state=SEED)),
+    ]
+)
+lr_pipe.fit(X_train, y_train)
+lr_auc = roc_auc_score(y_test, lr_pipe.predict_proba(X_test)[:, 1])
+print(f"Logistic Regression ROC-AUC: {lr_auc:.4f}")
 
 # %%
-# Confusion matrix Logistic Regression
-fig, ax = plt.subplots(figsize=(5, 4))
-ConfusionMatrixDisplay.from_estimator(
-    lr_pipe,
-    X_test,
-    y_test,
-    display_labels=["Rimasto (0)", "Churned (1)"],
-    colorbar=False,
-    ax=ax,
-)
-ax.set_title("Confusion Matrix — Logistic Regression baseline", fontsize=11)
-save_current_figure("lesson_01_confusion_matrix_baseline.png")
-plt.show()
-
-# %%
-# ROC Curve: mostra il trade-off TPR/FPR al variare della soglia di classificazione
-fig, ax = plt.subplots(figsize=(5, 4.5))
-RocCurveDisplay.from_estimator(
-    lr_pipe,
-    X_test,
-    y_test,
-    ax=ax,
-    name=f"Logistic Regression (AUC = {lr_auc:.3f})",
-)
-ax.plot(
-    [0, 1],
-    [0, 1],
-    linestyle="--",
-    color="gray",
-    label="Classificatore casuale (AUC = 0.500)",
-)
-ax.set_title("ROC Curve — Logistic Regression baseline")
-ax.legend(loc="lower right", fontsize=9)
-save_current_figure("lesson_01_roc_curve_baseline.png")
-plt.show()
-
-print("\nClassification report:")
-print(
-    classification_report(
-        y_test, lr_pipe.predict(X_test), target_names=["Rimasto (0)", "Churned (1)"]
-    )
-)
+# TODO(LIVE): visualizzare matrice di confusione e curva ROC per la Logistic Regression
+# Hint: usa ConfusionMatrixDisplay.from_estimator e RocCurveDisplay.from_estimator; stampa anche il classification_report
 
 # %% [markdown]
 # ### Interpretazione — Baseline
