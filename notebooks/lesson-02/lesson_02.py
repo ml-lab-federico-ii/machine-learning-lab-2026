@@ -7,10 +7,6 @@
 # - Enrico Huber
 # - Pietro Soglia
 #
-# **Emails:**
-# - TODO: inserire email
-# - TODO: inserire email
-#
 # **Last updated:** 2026-03-12
 #
 # ## Obiettivi di apprendimento
@@ -228,6 +224,16 @@ display(df.describe(include=[np.number]).T)
 # %%
 TARGET = "Exited"
 
+# Colonne con dtype numerico che sono semanticamente categoriche (binarie / ordinali a bassa cardinalità).
+# Verranno trattate come categoriche nel preprocessing (OHE invece di scaling).
+NUMERIC_AS_CATEGORICAL = {
+    "IsActiveMember",
+    "HasCrCard",
+    "NumOfProducts",
+    "Satisfaction Score",
+    "balance_is_zero",  # feature ingegnerizzata (binaria 0/1) creata in sezione 8
+}
+
 # Colonne da rimuovere con motivazione esplicita
 ID_COLS = ["RowNumber", "CustomerId", "Surname"]
 # RowNumber: indice artificiale, nessun significato predittivo
@@ -356,8 +362,8 @@ for cls, w in class_weights.items():
     print(f"  classe {cls}: peso = {w:.4f}")
 
 print(
-    "\nEffetto: la classe minoritaria (churn=1) riceve peso "
-    f"{class_weights[1]:.2f}x maggiore rispetto alla classe maggioritaria."
+    "\nEffetto: ogni errore su un campione churn vale ~"
+    f"{class_weights[1]:.2f} di più nella loss rispetto a un errore su un campione non-churn."
 )
 
 # Esempio di inizializzazione (senza fit)
@@ -366,7 +372,7 @@ lr_balanced = LogisticRegression(
     max_iter=1000,
     random_state=SEED,
 )
-print(f"\nLogisticRegression con class_weight='balanced': {lr_balanced}")
+lr_balanced
 
 # %% [markdown]
 # - La classe **churn (y=1)** riceve peso **~2.45x** maggiore rispetto alla classe
@@ -425,7 +431,9 @@ except ImportError:
 from pandas.api.types import is_numeric_dtype
 
 num_cols_raw = [
-    c for c in df_clean.columns if is_numeric_dtype(df_clean[c]) and c != TARGET
+    c
+    for c in df_clean.columns
+    if is_numeric_dtype(df_clean[c]) and c != TARGET and c not in NUMERIC_AS_CATEGORICAL
 ]
 
 # Calcolo soglie IQR per ogni feature numerica
@@ -468,7 +476,6 @@ key_features = [
     "CreditScore",
     "EstimatedSalary",
     "Tenure",
-    "NumOfProducts",
 ]
 key_features = [c for c in key_features if c in df_clean.columns]
 
@@ -489,9 +496,6 @@ plt.show()
 #   sono **contenute** (< 1% per la maggior parte delle colonne).
 # - `Balance` ha la distribuzione bimodale già osservata in Lezione 1: il "cluster" a
 #   saldo zero non è un outlier, ma una caratteristica strutturale del dataset.
-# - `NumOfProducts` mostra outlier per valori 3 e 4 — pattern già osservato in Lezione 1
-#   (churn rate anomalo). Non si tratta di errori di misurazione, ma di sotto-gruppi
-#   con comportamento peculiare: li manteniamo.
 # - **Decisione:** non applichiamo clipping aggressivo; il `RobustScaler` (proposto
 #   nella sezione 12) è robusto agli outlier moderati. Per dataset con outlier severi
 #   si userebbe clipping al 1°/99° percentile prima dello scaling.
@@ -562,8 +566,16 @@ plt.show()
 feature_cols = [c for c in df_clean.columns if c != TARGET]
 
 # Separazione per tipo
-num_cols = [c for c in feature_cols if is_numeric_dtype(df_clean[c])]
-cat_cols = [c for c in feature_cols if not is_numeric_dtype(df_clean[c])]
+num_cols = [
+    c
+    for c in feature_cols
+    if is_numeric_dtype(df_clean[c]) and c not in NUMERIC_AS_CATEGORICAL
+]
+cat_cols = [
+    c
+    for c in feature_cols
+    if not is_numeric_dtype(df_clean[c]) or c in NUMERIC_AS_CATEGORICAL
+]
 
 print("=== Feature set ===")
 print(f"\nFeature numeriche ({len(num_cols)}):")
@@ -583,9 +595,10 @@ y = df_clean[TARGET]
 
 # %% [markdown]
 # - Il feature set finale comprende **13 feature** (14 colonne totali − 1 target):
-#   - **10 numeriche**: includono la nuova `balance_is_zero` e tutte le feature
-#     continue/intere.
-#   - **3 categoriche**: `Geography`, `Gender`, `Card Type`.
+#   - **5 numeriche continue**: `CreditScore`, `Age`, `Tenure`, `Balance`, `EstimatedSalary`.
+#   - **8 categoriche** (incluse 5 a dtype numerico ma semanticamente categoriche):
+#     `Geography`, `Gender`, `Card Type`, `IsActiveMember`, `HasCrCard`,
+#     `NumOfProducts`, `Satisfaction Score`, `balance_is_zero`.
 # - La separazione esplicita in `num_cols` e `cat_cols` guiderà la costruzione
 #   del `ColumnTransformer` nella Pipeline sklearn.
 
@@ -694,7 +707,12 @@ print(f"\nShape categoriche encoded (train): {X_train_cat_enc.shape}")
 # - `Geography` (3 valori: France, Germany, Spain) → **3 colonne** dummy.
 # - `Gender` (2 valori) → **2 colonne** dummy.
 # - `Card Type` (4 valori) → **4 colonne** dummy.
-# - Totale: le 3 feature categoriche diventano **9 feature binarie** dopo
+# - `IsActiveMember` (2 valori) → **2 colonne** dummy.
+# - `HasCrCard` (2 valori) → **2 colonne** dummy.
+# - `NumOfProducts` (4 valori) → **4 colonne** dummy.
+# - `Satisfaction Score` (5 valori) → **5 colonne** dummy.
+# - `balance_is_zero` (2 valori) → **2 colonne** dummy.
+# - Totale: le 8 feature categoriche diventano **24 feature binarie** dopo
 #   il OneHotEncoding.
 # - L'encoder è stato fittato **solo su `X_train`**: questo garantisce che le
 #   categorie di `X_val` e `X_test` siano codificate secondo le stesse regole;
@@ -824,9 +842,9 @@ joblib.dump(preprocessor, preprocessor_path)
 print(f"Pipeline salvata in: {preprocessor_path}")
 
 # %% [markdown]
-# - La Pipeline finale trasforma le **13 feature** originali in **19 feature**
-#   dopo OneHotEncoding: le 10 numeriche rimangono 10 (+ `balance_is_zero`)
-#   mentre le 3 categoriche diventano 9 colonne dummy.
+# - La Pipeline finale trasforma le **13 feature** originali in **29 feature**
+#   dopo OneHotEncoding: le 5 numeriche continue vengono scalate,
+#   mentre le 8 categoriche diventano 24 colonne dummy.
 # - Tutti gli step sono concatenati in un oggetto riproducibile e serializzabile:
 #   in Lezione 3 basterà caricare il preprocessore con `joblib.load` e chiamare
 #   `transform` su nuovi dati senza rieseguire code.
@@ -1051,9 +1069,9 @@ print(f"\nFeature names salvati in: {feature_names_path}")
 # | Outlier check (IQR) | Outlier contenuti (<1%); nessun clipping necessario |
 # | Feature engineering | `balance_is_zero`: churn rate 13.82% (saldo zero) vs 24.10% (saldo positivo) |
 # | Split 60/20/20 stratificato | Train: 6,000 \| Val: 2,000 \| Test: 2,000 — churn rate costante (~20.38%) |
-# | OneHotEncoding (fit su train) | 3 feature categoriche → 9 colonne dummy |
-# | StandardScaler (fit su train) | 10 feature numeriche normalizzate (media≈0, std≈1 su train) |
-# | Pipeline ColumnTransformer | 13 feature input → 19 feature output |
+# | OneHotEncoding (fit su train) | 8 feature categoriche → 24 colonne dummy |
+# | StandardScaler (fit su train) | 5 feature numeriche continue normalizzate (media≈0, std≈1 su train) |
+# | Pipeline ColumnTransformer | 13 feature input → 29 feature output |
 # | Verifica preprocessing | NaN: 0; shape corretti; no leakage confermato |
 # | Salvataggio dataset modellabile | 6 file Parquet + pipeline PKL + feature names JSON |
 #
@@ -1061,7 +1079,7 @@ print(f"\nFeature names salvati in: {feature_names_path}")
 #
 # | Aspetto | Lezione 1 | Lezione 2 |
 # |---------|-----------|-----------|
-# | Feature set | 14 colonne (con dummy one-hot rapido) | 13 feature → 19 dopo Pipeline |
+# | Feature set | 14 colonne (con dummy one-hot rapido) | 13 feature → 29 dopo Pipeline |
 # | Preprocessing | Minimale (imputer + scaler + get_dummies su tutto il dataset) | Pipeline completa, anti-leakage |
 # | Split | 80/20 (senza validation set) | 60/20/20 stratificato |
 # | Dataset modellabile | Solo in memoria | Persistito in `outputs/data/` |
