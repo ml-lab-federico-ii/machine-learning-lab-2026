@@ -177,7 +177,7 @@ def load_dataset_from_archive(
 # | Segnale forte | `Age` (r=+0.285), `IsActiveMember` (r=−0.156), `Balance` (r=+0.119) |
 # | Bimodalità `Balance` | 36% dei clienti ha saldo zero; churn rate diverso (14% vs 24%) |
 # | Feature rumore | `EstimatedSalary`, `Satisfaction Score`, `HasCrCard`, `Point Earned` (r ≈ 0) |
-# | Baseline | Logistic Regression: ROC-AUC ≈ **0.77**, recall churn = **21.1%** |
+# | Baseline | Logistic Regression: ROC-AUC ≈ **0.85**, recall churn = **37%** |
 #
 # ### Operazioni pianificate per questa lezione
 #
@@ -231,7 +231,6 @@ NUMERIC_AS_CATEGORICAL = {
     "HasCrCard",
     "NumOfProducts",
     "Satisfaction Score",
-    "balance_is_zero",  # feature ingegnerizzata (binaria 0/1) creata in sezione 8
 }
 
 # Colonne da rimuovere con motivazione esplicita
@@ -311,7 +310,7 @@ print(f"  Utilità pratica: NULLA")
 # $$\text{ROC-AUC} = P(\hat{p}(\text{churner}) > \hat{p}(\text{non-churner}))$$
 #
 # **Baseline Lezione 1:** Logistic Regression con preprocessing minimale
-# ha ottenuto ROC-AUC ≈ **0.77** ma recall churn = **21.1%** (86/408 churner
+# ha ottenuto ROC-AUC ≈ **0.85** ma recall churn = **37%** (86/408 churner
 # identificati nel test set). Il preprocessing corretto di questa lezione
 # servirà come base per migliorare questo risultato nella Lezione 3.
 #
@@ -544,6 +543,10 @@ ax.axhline(
 ax.legend(fontsize=8)
 save_current_figure("lesson_02_balance_is_zero_churn_rate.png")
 plt.show()
+
+# %%
+# Aggiungiamo balance_is_zero a NUMERIC_AS_CATEGORICAL per trattarla come categorica nel preprocessing
+NUMERIC_AS_CATEGORICAL.add("balance_is_zero")
 
 # %% [markdown]
 # - **`Balance==0`**: churn rate = **13.82%** (n=3,617 clienti con saldo zero).
@@ -995,7 +998,7 @@ print(f"\nFeature names salvati in: {feature_names_path}")
 # Il suo recall sulla classe churn è **0%**: non identifica un solo churner.
 # Per problemi di churn, la metrica rilevante è il **recall** (quanti churner
 # reali identifichiamo) o la **ROC-AUC** (capacità discriminativa). In Lezione 1
-# il modello baseline con recall=21.1% era già migliore del "dummy" nonostante
+# il modello baseline con recall=37% era già migliore del "dummy" nonostante
 # una accuracy non lontana.
 #
 # ---
