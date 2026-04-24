@@ -1,0 +1,25 @@
+{
+  "best_model": "RandomForestClassifier(n_estimators=200, class_weight='balanced', random_state=42)",
+  "best_threshold": 0.36,
+  "train": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "val": {
+    "accuracy": 0.8645,
+    "precision": 0.6846,
+    "recall": 0.6225,
+    "f1": 0.6521,
+    "roc_auc": 0.8723
+  },
+  "test": {
+    "accuracy": 0.843,
+    "precision": 0.6195,
+    "recall": 0.5921,
+    "f1": 0.6055,
+    "roc_auc": 0.8575
+  }
+}

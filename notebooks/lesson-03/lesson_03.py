@@ -7,10 +7,6 @@
 # - Enrico Huber
 # - Pietro Soglia
 #
-# **Emails:**
-# - enrico.huber@gmail.com
-# - pietro.soglia@gmail.com
-#
 # **Last updated:** 2026-03-12
 #
 # ## Obiettivi di apprendimento
@@ -260,12 +256,12 @@ for i, f in enumerate(feature_names, 1):
 # %% [markdown]
 # **Osservazioni:**
 #
-# - `X_train`: 6 000 campioni × 20 feature; `X_val` e `X_test`: 2 000 × 20.
+# - `X_train`: 6 000 campioni × 30 feature; `X_val` e `X_test`: 2 000 × 30.
 # - Churn rate stabile su tutti e tre gli split (≈ 20.38–20.40%): la
 #   stratificazione ha funzionato correttamente.
 # - NaN assenti in tutti gli split: il preprocessing è completo.
-# - Le 20 feature includono 11 numeriche scalate e 9 categoriche one-hot
-#   encoded. La feature `num__balance_is_zero` cattura la bimodalità di
+# - Le 30 feature includono 6 numeriche scalate e 24 categoriche one-hot
+#   encoded. La feature `cat__balance_is_zero_1` cattura la bimodalità di
 #   `Balance` documentata nella Lezione 1.
 # - Il dataset è sbilanciato (≈ 4:1). Questo condizionerà ogni scelta
 #   successiva — a partire dalla metrica di valutazione.
@@ -369,12 +365,13 @@ print(f"ROC-AUC: {roc_auc_score(y_val, y_prob_lr_naive):.4f}")
 # %% [markdown]
 # **Osservazioni — dove va bene e dove va male:**
 #
-# - Accuracy = **81.4%** — lievemente meglio del Dummy. Successo apparente.
-# - Recall churn = **20.6%** — identifica solo ~84 churner su 408 nel val set.
-#   Il modello "manca" 324 churner: li classifica come non-churn.
-# - Precision churn = **63.6%** — quando dice "churn", ha ragione il 64% delle volte.
+# - Accuracy = **85.3%** — sensibilmente meglio del Dummy, ma vedremo che
+#   è un successo apparente.
+# - Recall churn = **38.5%** — identifica solo ~157 churner su 408 nel val set.
+#   Il modello "manca" 251 churner: li classifica come non-churn.
+# - Precision churn = **78.5%** — quando dice "churn", ha ragione il 79% delle volte.
 #   Ma lo dice raramente.
-# - ROC-AUC = **0.786** — il potere discriminativo esiste, ma la soglia di default
+# - ROC-AUC = **0.855** — il potere discriminativo esiste, ma la soglia di default
 #   (0.5) fa sì che venga sfruttato male.
 #
 # **Perché succede?** Con classi sbilanciate (80/20), minimizzare la cross-entropy
@@ -437,13 +434,13 @@ print(pd.DataFrame(comp_data).to_string(index=False))
 # %% [markdown]
 # **Cosa ci dicono questi numeri?**
 #
-# - Recall churn: **20.6% → 71.3%** (+50.7 punti percentuali). Straordinario.
-#   Il modello ora identifica 290 churner su 408, contro gli 84 di prima.
-# - Precision churn: **63.6% → 38.9%** (scende). Per ogni churner vero, il modello
+# - Recall churn: **38.5% → 78.4%** (+39.9 punti percentuali). Straordinario.
+#   Il modello ora identifica 320 churner su 408, contro i 157 di prima.
+# - Precision churn: **78.5% → 47.5%** (scende). Per ogni churner vero, il modello
 #   ora segnala anche più falsi positivi. Accettabile: in retention, un falso
 #   allarme costa meno di un churner non identificato.
-# - F1 churn: **0.311 → 0.504** (da modello mediocre a modello utilizzabile).
-# - **ROC-AUC: 0.786 → 0.787** (quasi invariato). Questo è il punto chiave:
+# - F1 churn: **0.516 → 0.591** (miglioramento netto).
+# - **ROC-AUC: 0.855 → 0.855** (invariato). Questo è il punto chiave:
 #   la ROC-AUC misura il *ranking* delle probabilità, non la soglia. `class_weight`
 #   sposta la soglia effettiva, non il potere discriminativo del modello.
 #   La curva ROC è la stessa; cambia il punto di operazione su di essa.
@@ -582,7 +579,7 @@ for metname, m in [
 #
 # - Train ROC-AUC = **1.000** e Train Recall = **1.000**: l'albero ha memorizzato
 #   *ogni singolo* esempio del training set. Perfetto su training, inutile in pratica.
-# - Val ROC-AUC = **0.677** (peggio di LR!), Val Recall = **48.3%**.
+# - Val ROC-AUC = **0.663** (peggio di LR!), Val Recall = **46.1%**.
 #
 # Un DT senza vincoli di profondità crea regole iper-specifiche che si adattano
 # al training set fino all'ultimo nodo (una foglia per campione). Come una formula
@@ -685,17 +682,15 @@ plt.show()
 #
 # - **Underfitting (depth 1–3):** entrambe le curve sono basse. Il modello è
 #   troppo semplice per catturare la struttura dei dati.
-# - **Zona ottimale (depth 5–6):** la curva di validation raggiunge il picco.
+# - **Zona ottimale (depth 6):** la curva di validation raggiunge il picco.
 #   In questo intervallo, l'albero ha imparato le strutture più importanti
 #   senza memorizzare il rumore.
 # - **Overfitting (depth ≥ 7):** la curva di training continua a salire verso 1.0,
 #   mentre quella di validation *scende*. Il gap si apre progressivamente:
 #   il modello sta memorizzando il training set invece di generalizzare.
 #
-# La depth ottimale per AUC (massima sul val) è **5**, mentre per F1 è **6**.
-# Dato che il nostro obiettivo primario è ROC-AUC (con attenzione anche al recall),
-# addestriamo il DT finale con **max_depth=6** come compromesso che massimizza F1
-# senza sacrificare eccessivamente la AUC.
+# La depth ottimale sia per AUC che per F1 sul val set è **6** (F1=0.585, AUC=0.843).
+# Addestriamo il DT finale con **max_depth=6**.
 
 # %%
 # Decision Tree finale con depth ottimale
@@ -715,13 +710,13 @@ print(f"ROC-AUC: {roc_auc_score(y_val, y_prob_dt):.4f}")
 # %% [markdown]
 # **DT depth=6 — un salto di qualità rispetto a LR:**
 #
-# - Recall churn = **75.3%** (vs 71.3% di LR): identifica ~307 churner su 408.
-# - ROC-AUC = **0.821** (vs 0.787 di LR): migliore potere discriminativo.
-# - F1 churn = **0.585** (vs 0.504 di LR): bilancio precision/recall migliore.
-# - Train ROC-AUC = 0.865: esiste ancora un gap train-val (0.865 - 0.821 = 0.044),
-#   ma è molto più contenuto rispetto all'albero profondo (1.000 - 0.677 = 0.323).
+# - Recall churn = **77.7%** (vs 78.4% di LR): praticamente equivalente.
+# - ROC-AUC = **0.843** (vs 0.855 di LR): leggermente inferiore.
+# - F1 churn = **0.585** (vs 0.591 di LR): bilancio precision/recall simile.
+# - Train ROC-AUC = 0.874: esiste ancora un gap train-val (0.874 - 0.843 = 0.031),
+#   ma è molto più contenuto rispetto all'albero profondo (1.000 - 0.663 = 0.337).
 #
-# Il DT con depth controllata supera LR su tutte le metriche rilevanti.
+# Il DT con depth controllata è competitivo con LR e cattura anche non-linearità.
 # Ma siamo sicuri di aver trovato il modello migliore? Proviamo il Random Forest.
 
 # %% [markdown]
@@ -793,9 +788,9 @@ for feat, imp in importances_top15.items():
 # %% [markdown]
 # **Osservazione — potenza e insidie del Random Forest:**
 #
-# - Val ROC-AUC = **0.873** — il migliore osservato finora (+0.052 rispetto a DT).
-# - Ma val Recall churn = **41.7%** — peggio di DT depth=6 (75.3%) e persino
-#   di LR+class_weight (71.3%). Come mai?
+# - Val ROC-AUC = **0.872** — il migliore osservato finora (+0.029 rispetto a DT).
+# - Ma val Recall churn = **42.9%** — peggio di DT depth=6 (77.7%) e persino
+#   di LR+class_weight (78.4%). Come mai?
 # - Train ROC-AUC = **1.000** — ancora overfitting a livello di training
 #   (RF ha 200 alberi profondi che memorizzano ogni dettaglio del training set).
 #   Eppure la val AUC è la migliore: RF generalizza bene *come discriminatore*
@@ -805,12 +800,13 @@ for feat, imp in importances_top15.items():
 #   e pochi esempi superano la soglia 0.5 per la classe churn.
 #
 # **Feature importance — coerenza con la Lezione 1:**
-# - `num__Age` (21.9%) è la feature più importante: confermato dalla correlazione
-#   r=+0.285 vista nella Lezione 1. I clienti più anziani churna di più.
-# - `num__NumOfProducts` (10.9%): i clienti con 3-4 prodotti churna quasi sempre
-#   (osservato nella Lezione 1).
-# - Sorpresa: `num__EstimatedSalary` (9.9%) e `num__Point Earned` (9.9%) appaiono
-#   rilevanti per RF nonostante la correlazione quasi nulla con il target (r≈0).
+# - `num__Age` (19.5%) è la feature più importante: confermato dalla correlazione
+#   r=+0.29 vista nella Lezione 1. I clienti più anziani churna di più.
+# - `cat__NumOfProducts_2` (8.0%): avere esattamente 2 prodotti è fortemente
+#   discriminante (churn rate molto basso per questo gruppo, osservato nella Lezione 1).
+# - Sorpresa: `num__Point Earned` (8.9%), `num__EstimatedSalary` (8.7%),
+#   `num__CreditScore` (8.7%) e `num__Balance` (8.6%) appaiono rilevanti per RF
+#   nonostante la correlazione quasi nulla con il target (r≈0).
 #   Questo suggerisce che queste feature contribuiscono in modo *non-lineare* o
 #   in *interazione* con altre — qualcosa che la correlazione di Pearson non cattura.
 #
@@ -903,9 +899,9 @@ print(f"ROC-AUC (invariato): {roc_auc_score(y_val, y_prob_rf):.4f}")
 # %% [markdown]
 # **Il parametro soglia come leva di business:**
 #
-# - Abbassando la soglia da 0.5 a ≈ 0.28–0.35, RF raggiunge recall ≈ 70–75%
-#   mantenendo una precision più alta di DT depth=6.
-# - La ROC-AUC (0.873) rimane invariata — è intrinsecamente indipendente dalla soglia:
+# - Abbassando la soglia da 0.5 a ≈ 0.36, RF raggiunge recall ≈ 62% con
+#   precision superiore a DT depth=6.
+# - La ROC-AUC (0.872) rimane invariata — è intrinsecamente indipendente dalla soglia:
 #   misura la capacità discriminativa dell'intero modello.
 # - **Insight operativo:** nella pratica, la soglia non si sceglie sola. Si definisce
 #   il *costo relativo* di FP vs FN (quanto vale trattenere un churner vs quanto
@@ -953,13 +949,13 @@ print(df_final.to_string(index=False))
 # **Lettura del quadro sinottico — non esiste un vincitore assoluto:**
 #
 # - **Dummy**: il floor da battere. Accuracy alta, tutto il resto a zero.
-# - **LR (class_weight)**: ottimo punto di partenza. Recall 71.3%, AUC 0.787.
+# - **LR (class_weight)**: ottimo punto di partenza. Recall 78.4%, AUC 0.855.
 #   Semplice, interpretabile, veloce. Meno potere discriminativo dei modelli
 #   ad albero.
-# - **DT (depth=6)**: recall più alto (75.3%), AUC media (0.821). Discreto
-#   equilibrio. Interpretabile (si può disegnare l'albero). Ma meno stabile
+# - **DT (depth=6)**: recall simile (77.7%), AUC leggermente inferiore (0.843).
+#   Discreto equilibrio. Interpretabile (si può disegnare l'albero). Ma meno stabile
 #   di RF sulle stesse caratteristiche.
-# - **RF (soglia=0.5)**: AUC migliore (0.873), ma recall basso (41.7%) —
+# - **RF (soglia=0.5)**: AUC migliore (0.872), ma recall basso (42.9%) —
 #   la soglia di default è inadatta per questo problema.
 # - **RF (soglia ottimale)**: il migliore su F1 e AUC, con recall competitivo.
 #   La **curva ROC domina** tutti gli altri modelli: a qualsiasi livello di
@@ -1005,8 +1001,8 @@ plt.show()
 #
 # - **RF** domina tutti gli altri modelli per quasi tutta la curva:
 #   a parità di falsi positivi, RF produce più veri positivi.
-# - **DT depth=6** è secondo, con un AUC di 0.821.
-# - **LR** è terzo con AUC 0.787 — ma semplice e interpretabile.
+# - **LR** è secondo con AUC 0.855 — semplice e interpretabile.
+# - **DT depth=6** è terzo, con un AUC di 0.843.
 # - Nella regione a bassissimo FPR (< 0.05), i modelli convergono:
 #   in quel regime nessuno riesce a catturare molti churner senza produrre
 #   falsi allarmi. Questo è tipico di dataset con segnale non perfetto.
@@ -1066,11 +1062,11 @@ for name, yp in cm_models:
 # **La confusion matrix traduce i numeri in impatto reale:**
 #
 # - **Dummy**: 408 churner persi su 408. Zero valore di business.
-# - **LR**: ≈ 117 churner persi.
-# - **DT depth=6**: ≈ 101 churner persi — meno di LR.
-# - **RF (soglia=0.5)**: ≈ 238 churner persi — molti! La soglia 0.5 è inadatta.
-# - **RF (soglia ottimale)**: churner persi ≈ comparabili a DT depth=6, con
-#   precision migliore.
+# - **LR**: 88 churner persi.
+# - **DT depth=6**: 91 churner persi — simile a LR.
+# - **RF (soglia=0.5)**: 233 churner persi — molti! La soglia 0.5 è inadatta.
+# - **RF (soglia ottimale)**: 154 churner persi, con precision molto migliore
+#   di LR/DT.
 #
 # Il numero di falsi negativi è la metrica di business più concreta:
 # ogni FN è un cliente che se ne va senza che la banca potesse intervenire.
@@ -1084,22 +1080,22 @@ for name, yp in cm_models:
 #
 # | Evidenza | Implicazione |
 # |----------|-------------|
-# | LR naïve: recall 20.6% | Senza gestione dell'imbalance, tutti i modelli falliscono |
-# | LR class_weight: AUC 0.787, recall 71.3% | Buona baseline; limite: iperpiano lineare |
+# | LR naïve: recall 38.5% | Senza gestione dell'imbalance, il modello ignora i churner |
+# | LR class_weight: AUC 0.855, recall 78.4% | Buona baseline; limite: iperpiano lineare |
 # | SMOTE ≈ class_weight su LR | Nessun vantaggio da campioni sintetici su modello lineare |
-# | DT depth=None: AUC val 0.677 | Overfitting totale senza regolarizzazione |
-# | DT depth=6: AUC 0.821, recall 75.3% | Miglioramento reale; limite: un solo albero |
-# | RF AUC=0.873, recall@soglia 0.5 = 41.7% | Pool migliore, soglia inadatta di default |
-# | RF + soglia ottimale: AUC 0.873 + recall ≈ DT | Il migliore su tutti i compromessi rilevanti |
+# | DT depth=None: AUC val 0.663 | Overfitting totale senza regolarizzazione |
+# | DT depth=6: AUC 0.843, recall 77.7% | Competitivo con LR; limite: un solo albero |
+# | RF AUC=0.872, recall@soglia 0.5 = 42.9% | Pool migliore, soglia inadatta di default |
+# | RF + soglia ottimale: AUC 0.872 + recall 62.3% | Il migliore su tutti i compromessi rilevanti |
 #
 # **Modello candidato: Random Forest (n_estimators=200, class_weight='balanced')**
 # con **soglia di classificazione ottimizzata su val set**.
 #
 # **Motivazione:**
-# 1. **ROC-AUC** più alta (0.873): la migliore capacità discriminativa — su ogni
+# 1. **ROC-AUC** più alta (0.872): la migliore capacità discriminativa — su ogni
 #    livello di FPR, RF identifica più churner degli altri modelli.
 # 2. **Recall controllabile** via soglia: abbassando la soglia da 0.5 al valore
-#    ottimale, RF raggiunge recall ≈ 70-75% mantenendo precision > DT depth=6.
+#    ottimale (0.36), RF raggiunge recall ≈ 62% con precision > DT depth=6.
 # 3. **Robustezza**: meno sensibile al rumore rispetto al singolo DT
 #    (gap train-val più contenuto rispetto a DT depth=None).
 # 4. **Foreshadowing Lezione 4**: la feature importance di RF è il punto di
@@ -1162,10 +1158,10 @@ for split_name, X_s, y_s in [
 # %% [markdown]
 # **Generalizzazione confermata — con una nota di cautela:**
 #
-# - Val ROC-AUC = **0.873**, Test ROC-AUC = **0.854**: differenza di 0.019.
+# - Val ROC-AUC = **0.872**, Test ROC-AUC = **0.858**: differenza di 0.014.
 #   Il leggero calo è atteso e fisiologico: val set e test set sono campioni
 #   diversi dalla stessa distribuzione.
-# - Il gap train-val-test (AUC: 1.000 → 0.873 → 0.854) rivela che l'overfitting
+# - Il gap train-val-test (AUC: 1.000 → 0.872 → 0.858) rivela che l'overfitting
 #   sul training set non ha compromesso la generalizzazione: il modello ha
 #   imparato strutture reali dai dati, non solo rumore.
 # - Recall e F1 sul test set sono coerenti con i valori sul val set:
@@ -1230,14 +1226,14 @@ print(json.dumps(metrics_out, indent=2))
 # guardare i numeri che avete calcolato e costruire un ragionamento.
 
 # %% [markdown]
-# **1. Perché LR senza class_weight aveva recall churn così basso (20.6%)?**
+# **1. Perché LR senza class_weight aveva recall churn così basso (38.5%)?**
 #
 # La cross-entropy minimizzata da LR non tiene conto della proporzione delle classi.
 # Con 80% di negativi e 20% di positivi, il modello "impara" che predire sempre
 # 0 minimizza la loss mediamente — perché sbagliare 20% (i positivi) costa meno che
 # sbagliare l'80% (i negativi). `class_weight='balanced'` forza il modello a
 # pesare allo stesso modo ogni errore sui churner e ogni errore sui non-churner,
-# indipendentemente dalla loro frequenza. Il recall passa da 20.6% a 71.3%.
+# indipendentemente dalla loro frequenza. Il recall passa da 38.5% a 78.4%.
 
 # %% [markdown]
 # **2. SMOTE ha migliorato le metriche rispetto a class_weight su LR? Perché sì o no?**
@@ -1266,16 +1262,17 @@ print(json.dumps(metrics_out, indent=2))
 # %% [markdown]
 # **4. Cosa ci dicono le feature importance di RF sul problema del churn?**
 #
-# - `num__Age` (21.9%): i clienti più anziani churna di più — coerente con
-#   la correlazione r=+0.285 di Lezione 1.
-# - `num__NumOfProducts` (10.9%): i clienti con 3-4 prodotti hanno un churn
-#   rate anomalmente alto (osservazione di Lezione 1).
-# - `num__EstimatedSalary` e `num__Point Earned` (≈ 9.9% ciascuno): *sorpresa*.
+# - `num__Age` (19.5%): i clienti più anziani churna di più — coerente con
+#   la correlazione r=+0.29 di Lezione 1.
+# - `cat__NumOfProducts_2` (8.0%): avere esattamente 2 prodotti distingue
+#   fortemente tra churner e non-churner (osservazione di Lezione 1).
+# - `num__Point Earned`, `num__EstimatedSalary`, `num__CreditScore` e
+#   `num__Balance` (≈ 8.6–8.9% ciascuno): *sorpresa*.
 #   Avevano correlazione ≈ 0 con il target nella Lezione 1, eppure RF le
 #   considera importanti. Questo rivela **interazioni non-lineari**: queste feature
-#   non sono predittive singolarmente, ma in combinazione con `Age` o `Balance`
-#   separano meglio le classi. RF le usa come "raffinamenti" dopo le prime
-#   partizioni su Age/NumOfProducts.
+#   non sono predittive singolarmente, ma in combinazione con `Age` o
+#   `NumOfProducts` separano meglio le classi. RF le usa come "raffinamenti"
+#   dopo le prime partizioni.
 
 # %% [markdown]
 # **5. Perché abbiamo usato il test set solo una volta e solo alla fine?**
@@ -1287,7 +1284,7 @@ print(json.dumps(metrics_out, indent=2))
 # La stima finale di performance risulterebbe ottimistica — gonfiata —
 # e non rifletterebbe la performance su dati realmente nuovi in produzione.
 # La disciplina di usare il test set una sola volta è il garante della validità
-# della stima di generalizzazione: 0.854 ROC-AUC è un numero su cui possiamo
+# della stima di generalizzazione: 0.858 ROC-AUC è un numero su cui possiamo
 # fare affidamento per decidere se il modello è pronto per la challenge.
 
 # %% [markdown]
@@ -1298,15 +1295,15 @@ print(json.dumps(metrics_out, indent=2))
 # | Step | Esperimento | Insight chiave |
 # |------|-------------|----------------|
 # | 1 | DummyClassifier | Accuracy 79.6%, recall 0% → paradosso accuracy |
-# | 2 | LR naïve | Recall 20.6% → il modello ignora la classe di interesse |
-# | 3 | LR + class_weight | Recall 71.3% → gestire lo sbilanciamento è essenziale |
+# | 2 | LR naïve | Recall 38.5% → il modello ignora la maggior parte dei churner |
+# | 3 | LR + class_weight | Recall 78.4% → gestire lo sbilanciamento è essenziale |
 # | 4 | SMOTE vs class_weight | Metriche identiche → class_weight vince per semplicità |
-# | 5 | DT max_depth=None | AUC val 0.677, train 1.0 → overfitting severo |
+# | 5 | DT max_depth=None | AUC val 0.663, train 1.0 → overfitting severo |
 # | 6 | DT curva depth | Gap train-val si apre da depth=7 → trovato ottimo a depth=6 |
-# | 7 | DT depth=6 | AUC 0.821, recall 75.3% → non-linearità utili |
-# | 8 | RF n=200 | AUC 0.873 → migliore, ma recall 41.7% con soglia 0.5 |
-# | 9 | RF + threshold | Soglia ottimale → recall ≈ 70-75%, F1 massimizzato |
-# | 10 | Test set (una volta) | AUC 0.854 → generalizzazione confermata |
+# | 7 | DT depth=6 | AUC 0.843, recall 77.7% → non-linearità utili |
+# | 8 | RF n=200 | AUC 0.872 → migliore, ma recall 42.9% con soglia 0.5 |
+# | 9 | RF + threshold | Soglia ottimale (0.36) → recall 62.3%, F1 massimizzato |
+# | 10 | Test set (una volta) | AUC 0.858 → generalizzazione confermata |
 #
 # ### Artefatti prodotti
 #
@@ -1322,7 +1319,7 @@ print(json.dumps(metrics_out, indent=2))
 #
 # ### Bridge verso la Lezione 4 — Interpretabilità
 #
-# Sappiamo ora **che** il Random Forest funziona (AUC 0.854 su test set).
+# Sappiamo ora **che** il Random Forest funziona (AUC 0.858 su test set).
 # Ma in ambito finanziario, un modello che funziona non basta: bisogna capire
 # **perché** prende certe decisioni.
 #
