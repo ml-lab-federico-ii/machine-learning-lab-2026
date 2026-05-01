@@ -1,0 +1,216 @@
+{
+  "metodo": "Consolidamento Gini + Permutation + SHAP",
+  "n_features": 30,
+  "ranking": [
+    {
+      "feature": "num__Age",
+      "rank_gini": 1,
+      "rank_permutation": 2,
+      "rank_shap": 1,
+      "mean_abs_shap": 0.12042179068740097
+    },
+    {
+      "feature": "cat__NumOfProducts_2",
+      "rank_gini": 6,
+      "rank_permutation": 1,
+      "rank_shap": 2,
+      "mean_abs_shap": 0.10125675700358952
+    },
+    {
+      "feature": "num__Balance",
+      "rank_gini": 5,
+      "rank_permutation": 5,
+      "rank_shap": 3,
+      "mean_abs_shap": 0.03357368907686554
+    },
+    {
+      "feature": "cat__Geography_Germany",
+      "rank_gini": 10,
+      "rank_permutation": 4,
+      "rank_shap": 4,
+      "mean_abs_shap": 0.030432405894109133
+    },
+    {
+      "feature": "cat__IsActiveMember_1",
+      "rank_gini": 11,
+      "rank_permutation": 7,
+      "rank_shap": 5,
+      "mean_abs_shap": 0.03012127679535235
+    },
+    {
+      "feature": "num__Point Earned",
+      "rank_gini": 2,
+      "rank_permutation": 9,
+      "rank_shap": 6,
+      "mean_abs_shap": 0.02829036776857334
+    },
+    {
+      "feature": "num__CreditScore",
+      "rank_gini": 4,
+      "rank_permutation": 25,
+      "rank_shap": 7,
+      "mean_abs_shap": 0.028066351679611266
+    },
+    {
+      "feature": "num__EstimatedSalary",
+      "rank_gini": 3,
+      "rank_permutation": 15,
+      "rank_shap": 8,
+      "mean_abs_shap": 0.02770335567229761
+    },
+    {
+      "feature": "cat__IsActiveMember_0",
+      "rank_gini": 12,
+      "rank_permutation": 8,
+      "rank_shap": 9,
+      "mean_abs_shap": 0.027459879970198928
+    },
+    {
+      "feature": "cat__NumOfProducts_3",
+      "rank_gini": 9,
+      "rank_permutation": 6,
+      "rank_shap": 10,
+      "mean_abs_shap": 0.020060606008918534
+    },
+    {
+      "feature": "num__Tenure",
+      "rank_gini": 7,
+      "rank_permutation": 28,
+      "rank_shap": 11,
+      "mean_abs_shap": 0.01945896240431797
+    },
+    {
+      "feature": "cat__NumOfProducts_1",
+      "rank_gini": 8,
+      "rank_permutation": 3,
+      "rank_shap": 12,
+      "mean_abs_shap": 0.018199606202058797
+    },
+    {
+      "feature": "cat__Gender_Male",
+      "rank_gini": 14,
+      "rank_permutation": 20,
+      "rank_shap": 13,
+      "mean_abs_shap": 0.014801916638543524
+    },
+    {
+      "feature": "cat__Gender_Female",
+      "rank_gini": 15,
+      "rank_permutation": 21,
+      "rank_shap": 14,
+      "mean_abs_shap": 0.013754419770693294
+    },
+    {
+      "feature": "cat__balance_is_zero_0",
+      "rank_gini": 26,
+      "rank_permutation": 10,
+      "rank_shap": 15,
+      "mean_abs_shap": 0.011181584618035634
+    },
+    {
+      "feature": "cat__Geography_France",
+      "rank_gini": 13,
+      "rank_permutation": 14,
+      "rank_shap": 16,
+      "mean_abs_shap": 0.010897207200492427
+    },
+    {
+      "feature": "cat__balance_is_zero_1",
+      "rank_gini": 29,
+      "rank_permutation": 11,
+      "rank_shap": 17,
+      "mean_abs_shap": 0.009338475869870121
+    },
+    {
+      "feature": "cat__Geography_Spain",
+      "rank_gini": 25,
+      "rank_permutation": 18,
+      "rank_shap": 18,
+      "mean_abs_shap": 0.005990771521637962
+    },
+    {
+      "feature": "cat__NumOfProducts_4",
+      "rank_gini": 30,
+      "rank_permutation": 13,
+      "rank_shap": 19,
+      "mean_abs_shap": 0.005422095694969163
+    },
+    {
+      "feature": "cat__Card Type_DIAMOND",
+      "rank_gini": 16,
+      "rank_permutation": 19,
+      "rank_shap": 20,
+      "mean_abs_shap": 0.005282207259376645
+    },
+    {
+      "feature": "cat__Satisfaction Score_1",
+      "rank_gini": 19,
+      "rank_permutation": 29,
+      "rank_shap": 21,
+      "mean_abs_shap": 0.005063293230741038
+    },
+    {
+      "feature": "cat__Card Type_SILVER",
+      "rank_gini": 17,
+      "rank_permutation": 12,
+      "rank_shap": 22,
+      "mean_abs_shap": 0.004943061273023779
+    },
+    {
+      "feature": "cat__HasCrCard_1",
+      "rank_gini": 27,
+      "rank_permutation": 22,
+      "rank_shap": 23,
+      "mean_abs_shap": 0.004934127210377656
+    },
+    {
+      "feature": "cat__Satisfaction Score_5",
+      "rank_gini": 23,
+      "rank_permutation": 24,
+      "rank_shap": 24,
+      "mean_abs_shap": 0.004740519668582426
+    },
+    {
+      "feature": "cat__Card Type_PLATINUM",
+      "rank_gini": 18,
+      "rank_permutation": 27,
+      "rank_shap": 25,
+      "mean_abs_shap": 0.004731508880964702
+    },
+    {
+      "feature": "cat__Satisfaction Score_2",
+      "rank_gini": 22,
+      "rank_permutation": 26,
+      "rank_shap": 26,
+      "mean_abs_shap": 0.004704915314975522
+    },
+    {
+      "feature": "cat__HasCrCard_0",
+      "rank_gini": 28,
+      "rank_permutation": 17,
+      "rank_shap": 27,
+      "mean_abs_shap": 0.004658564001029556
+    },
+    {
+      "feature": "cat__Card Type_GOLD",
+      "rank_gini": 21,
+      "rank_permutation": 16,
+      "rank_shap": 28,
+      "mean_abs_shap": 0.004579171096900111
+    },
+    {
+      "feature": "cat__Satisfaction Score_4",
+      "rank_gini": 20,
+      "rank_permutation": 30,
+      "rank_shap": 29,
+      "mean_abs_shap": 0.004365478585826574
+    },
+    {
+      "feature": "cat__Satisfaction Score_3",
+      "rank_gini": 24,
+      "rank_permutation": 23,
+      "rank_shap": 30,
+      "mean_abs_shap": 0.004363481075525891
+    }
+  ]
+}
