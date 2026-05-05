@@ -1,0 +1,19 @@
+{
+  "lesson": "01",
+  "topic": "Introduction to Machine Learning and the Churn Prediction Problem",
+  "rows": 10000,
+  "cols": 19,
+  "target_rate_exited_pct": 20.38,
+  "missing_total": 0,
+  "top_correlations_with_target": {
+    "Exited": 1.0,
+    "Age": 0.2853,
+    "Balance": 0.1186,
+    "EstimatedSalary": 0.0125,
+    "Point Earned": -0.0046,
+    "Satisfaction Score": -0.0058,
+    "Tenure": -0.0137,
+    "CreditScore": -0.0268,
+    "NumOfProducts": -0.0476
+  }
+}

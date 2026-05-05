@@ -1,0 +1,5 @@
+# Report generati dai gruppi (runtime)
+outputs/*.html
+
+# Cheat-sheet docente (baseline + domande, NON visibile agli studenti)
+instructor_cheatsheet.json

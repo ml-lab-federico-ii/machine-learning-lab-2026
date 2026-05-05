@@ -10,3 +10,4 @@ ipykernel
 imbalanced-learn
 shap
 xgboost
+ipywidgets
