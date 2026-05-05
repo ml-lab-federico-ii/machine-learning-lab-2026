@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 def _fig_to_base64(fig: plt.Figure) -> str:
     """Converte una figura matplotlib in stringa base64 PNG."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
     buf.seek(0)
     encoded = base64.b64encode(buf.read()).decode("utf-8")
     buf.close()
@@ -58,7 +58,7 @@ _CSS = """
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     color: #1a1a2e; background: #f5f6fa; line-height: 1.6;
   }
-  .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
   .cover {
     background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
     color: white; padding: 60px 40px; text-align: center; border-radius: 12px;
@@ -271,7 +271,7 @@ def generate_html_report(
         parts.append("</div>")
         for title, fig in final_model_figures:
             b64 = _fig_to_base64(fig)
-            parts.append(f"<div class='fig-container'>{_img_tag(b64, title, '600px')}</div>")
+            parts.append(f"<div class='fig-container'>{_img_tag(b64, title, '80%')}</div>")
         parts.append("</div>")
 
     # --- Feature Importance ---
@@ -279,7 +279,7 @@ def generate_html_report(
         parts.append("<div class='section'>")
         parts.append("<h2>6. Feature Importance</h2>")
         b64 = _fig_to_base64(feature_importance_fig)
-        parts.append(f"<div class='fig-container'>{_img_tag(b64, 'Feature Importance', '700px')}</div>")
+        parts.append(f"<div class='fig-container'>{_img_tag(b64, 'Feature Importance', '90%')}</div>")
         parts.append("</div>")
 
     # --- Team Interpretation ---
