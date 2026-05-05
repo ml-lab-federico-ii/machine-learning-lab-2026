@@ -610,15 +610,30 @@ def main() -> None:
 
         df = _generate_dataset(profile, args.n_rows, seed)
 
-        # Salva CSV
+        # Split 85/15 fisso: studenti vedono solo il train set
+        hold_out_seed = MASTER_SEED + seed_id * 7  # seed deterministico separato
+        df_train, df_test = train_test_split(
+            df,
+            test_size=0.15,
+            stratify=df[TARGET_COLUMN],
+            random_state=hold_out_seed,
+        )
+        df_train = df_train.reset_index(drop=True)
+        df_test = df_test.reset_index(drop=True)
+
+        # Salva CSV train (visibile agli studenti)
         csv_path = datasets_dir / f"seed_{seed_id:02d}.csv"
-        df.to_csv(csv_path, index=False)
+        df_train.to_csv(csv_path, index=False)
 
-        churn_rate = df[TARGET_COLUMN].mean()
-        print(f"churn={churn_rate:.1%}, shape={df.shape}", end=" ")
+        # Salva CSV test (gitignored, solo docente)
+        test_path = datasets_dir / f"seed_{seed_id:02d}_test.csv"
+        df_test.to_csv(test_path, index=False)
 
-        # Baselines
-        baselines = _evaluate_baselines(df, seed)
+        churn_rate = df_train[TARGET_COLUMN].mean()
+        print(f"churn={churn_rate:.1%}, train={len(df_train)}, test={len(df_test)}", end=" ")
+
+        # Baselines (su train, come prima)
+        baselines = _evaluate_baselines(df_train, seed)
         best_model = max(baselines, key=baselines.get)
         print(f"→ best={best_model} (AUC={baselines[best_model]:.4f})")
 
@@ -627,8 +642,10 @@ def main() -> None:
                 "seed": seed_id,
                 "profile_name": profile["name"],
                 "profile_desc": profile["desc"],
-                "n_rows": len(df),
-                "churn_rate": round(churn_rate, 4),
+                "n_rows_train": len(df_train),
+                "n_rows_test": len(df_test),
+                "churn_rate_train": round(churn_rate, 4),
+                "churn_rate_test": round(df_test[TARGET_COLUMN].mean(), 4),
                 "baselines": {k: round(v, 4) for k, v in baselines.items()},
                 "best_model": best_model,
                 "best_auc": round(baselines[best_model], 4),
@@ -643,9 +660,10 @@ def main() -> None:
         json.dump(cheatsheet, f, indent=2, ensure_ascii=False)
 
     print(f"\n{'='*60}")
-    print(f"  Dataset salvati in:     {datasets_dir}/")
-    print(f"  Cheat-sheet docente:    {cheatsheet_path}")
-    print(f"  (il cheat-sheet è gitignored)")
+    print(f"  Dataset train salvati in: {datasets_dir}/seed_XX.csv")
+    print(f"  Dataset test salvati in:  {datasets_dir}/seed_XX_test.csv")
+    print(f"  Cheat-sheet docente:      {cheatsheet_path}")
+    print(f"  (test CSV e cheat-sheet sono gitignored)")
     print(f"{'='*60}")
 
     # Riepilogo diversità

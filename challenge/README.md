@@ -13,8 +13,10 @@ challenge/
 ├── challenge_notebook.ipynb   # Notebook studenti
 ├── generate_datasets.py       # Script generazione dataset (docente)
 ├── report_generator.py        # Generatore report HTML
-├── datasets/                  # 15 CSV sintetici (seed_01..seed_15)
-├── outputs/                   # Report HTML generati (gitignored)
+├── evaluate.py                # Valutazione modelli + leaderboard (docente)
+├── datasets/                  # 15 CSV train (seed_01..seed_15) + test gitignored
+├── submissions/               # Bundle .joblib ricevuti (gitignored)
+├── outputs/                   # Report HTML e modelli generati (gitignored)
 ├── instructor_cheatsheet.json # Risposte attese (gitignored)
 └── README.md                  # Questo file
 ```
@@ -112,3 +114,70 @@ Assicuratevi di eseguire il notebook dalla root del repository.
 ### "XGBoost non disponibile"
 Gli studenti possono usare i 3 modelli restanti (LogReg, DT, RF).
 Per installare: `pip install xgboost`.
+
+---
+
+## Valutazione Lato Docente (Test Set Nascosto)
+
+Gli studenti consegnano **due file** via email:
+- `report_seed_XX.html` — report con grafici e analisi
+- `model_seed_XX.joblib` — bundle con modello + pipeline preprocessing
+
+Il test set (15% del dataset originale, ~1500 righe) è salvato in
+`challenge/datasets/seed_XX_test.csv` ed è gitignored — gli studenti
+non lo vedono mai.
+
+### 1. Raccogliere i file ricevuti
+
+Salvate i `.joblib` ricevuti in `challenge/submissions/`:
+
+```
+challenge/submissions/
+├── model_seed_03.joblib   # gruppo A
+├── model_seed_07.joblib   # gruppo B
+└── ...
+```
+
+### 2. Valutare un singolo gruppo
+
+```bash
+python challenge/evaluate.py --seed 3 --model challenge/submissions/model_seed_03.joblib
+```
+
+Output:
+```
+────────────────────────────────────────────────────────
+  SEED 03 | Rossi · Bianchi · Ferrari
+  Modello:       RandomForest
+  AUC train:     0.8123
+  AUC test:      0.7891   Δ=-0.0232  ✅ ok
+  F1 test:       0.6544
+  Precision:     0.7012
+  Recall:        0.6142
+────────────────────────────────────────────────────────
+```
+
+### 3. Leaderboard di tutti i gruppi
+
+```bash
+python challenge/evaluate.py --all --submissions-dir challenge/submissions/
+```
+
+Output:
+```
+============================================================
+  LEADERBOARD — Challenge ML (test set nascosto)
+============================================================
+  #  SEED  Gruppo                  Modello            AUC_tr  AUC_te       Δ
+  ─────────────────────────────────────────────────────────────────────────
+  1     3  Rossi · Bianchi         RandomForest       0.8123  0.7891  -0.0232
+  2     7  Neri · Verdi · Blu      XGBoost            0.7956  0.7712  -0.0244
+  ...
+```
+
+Aggiungete `--json` per salvare la leaderboard in `submissions/leaderboard.json`.
+
+### Nota su overfitting
+
+Il flag ⚠️ appare quando `Δ AUC < -0.05`. Utile come spunto di discussione
+durante il debriefing: "il vostro modello funzionava su dati che avete già visto?"
