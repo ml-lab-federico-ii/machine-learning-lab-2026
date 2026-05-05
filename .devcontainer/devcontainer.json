@@ -9,7 +9,7 @@
         "ms-toolsai.jupyter",
         "mechatroner.rainbow-csv",
         "vscode-icons-team.vscode-icons",
-        "george-oliveira.html-preview"
+        "george-alisson.html-preview-vscode"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python3.11",
