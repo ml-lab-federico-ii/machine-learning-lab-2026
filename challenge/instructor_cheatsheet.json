@@ -1,0 +1,272 @@
+[
+  {
+    "seed": 1,
+    "profile_name": "Churn basso, segnale lineare",
+    "profile_desc": "Churn rate ~12%. Il segnale è prevalentemente lineare (Age, Balance). Modelli lineari (LogReg) sono competitivi.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.0914,
+    "churn_rate_test": 0.0913,
+    "baselines": {
+      "LogisticRegression": 0.5979,
+      "DecisionTree": 0.5808,
+      "RandomForest": 0.5801
+    },
+    "best_model": "LogisticRegression",
+    "best_auc": 0.5979,
+    "question_business": "Il vostro dataset ha un churn rate molto basso. Come influenza questo la strategia di retention della banca? È più importante la precision o la recall in questo scenario?",
+    "question_technical": "Avete osservato che modelli semplici performano in modo competitivo? Perché pensate che sia così, e cosa ci dice sulla natura dei dati?"
+  },
+  {
+    "seed": 2,
+    "profile_name": "Churn alto, forte effetto Age",
+    "profile_desc": "Churn rate ~28%. Forte correlazione Age-Churn: clienti over 45 hanno rischio 3x. RF e XGBoost dovrebbero catturare bene le non-linearità.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.4256,
+    "churn_rate_test": 0.4253,
+    "baselines": {
+      "LogisticRegression": 0.6993,
+      "DecisionTree": 0.6846,
+      "RandomForest": 0.7109
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.7109,
+    "question_business": "I clienti più anziani nel vostro dataset mostrano un rischio churn significativamente più alto. Quale programma di retention proporreste specificamente per questo segmento?",
+    "question_technical": "Il vostro dataset ha un churn rate elevato (~28%). Come avete gestito lo sbilanciamento delle classi? Quale impatto ha avuto sulle metriche?"
+  },
+  {
+    "seed": 3,
+    "profile_name": "Interazioni non-lineari complesse",
+    "profile_desc": "Churn rate ~20%. Il segnale dipende da interazioni tra feature (Age×IsActive, NumProducts×Balance). XGBoost è favorito.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.3893,
+    "churn_rate_test": 0.3893,
+    "baselines": {
+      "LogisticRegression": 0.7046,
+      "DecisionTree": 0.7484,
+      "RandomForest": 0.7477
+    },
+    "best_model": "DecisionTree",
+    "best_auc": 0.7484,
+    "question_business": "Nel vostro dataset, il rischio di churn dipende da combinazioni di fattori, non da singole variabili. Come comunichereste questa complessità a un manager non tecnico?",
+    "question_technical": "Avete notato differenze significative tra modelli lineari e tree-based? Cosa suggerisce questo sulla struttura sottostante dei dati?"
+  },
+  {
+    "seed": 4,
+    "profile_name": "Forte rumore, modelli semplici robusti",
+    "profile_desc": "Churn rate ~22%. Molto rumore nei dati: le relazioni feature-target sono deboli. Modelli semplici (LogReg, DT shallow) sono più robusti.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.2164,
+    "churn_rate_test": 0.216,
+    "baselines": {
+      "LogisticRegression": 0.589,
+      "DecisionTree": 0.5489,
+      "RandomForest": 0.5664
+    },
+    "best_model": "LogisticRegression",
+    "best_auc": 0.589,
+    "question_business": "I vostri modelli raggiungono AUC relativamente basse. Come spieghereste al cliente che il modello ha comunque valore di business nonostante le performance limitate?",
+    "question_technical": "Avete osservato overfitting nei modelli più complessi? Come avete affrontato il problema? Quale modello si è dimostrato più robusto al rumore?"
+  },
+  {
+    "seed": 5,
+    "profile_name": "Squilibrio geografico forte",
+    "profile_desc": "Churn rate ~18%. 70% dei clienti sono tedeschi con churn rate molto più alto. Il preprocessing delle feature categoriche è critico.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.2509,
+    "churn_rate_test": 0.2507,
+    "baselines": {
+      "LogisticRegression": 0.6584,
+      "DecisionTree": 0.6275,
+      "RandomForest": 0.6663
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.6663,
+    "question_business": "Il vostro dataset è dominato da clienti di una specifica area geografica con alto churn. Come adattereste la strategia di retention per questo mercato?",
+    "question_technical": "La forte concentrazione geografica influenza l'importanza delle feature? Come avete gestito questa asimmetria nel preprocessing?"
+  },
+  {
+    "seed": 6,
+    "profile_name": "Poche feature dominanti",
+    "profile_desc": "Churn rate ~21%. Il segnale è concentrato su 2-3 feature (NumOfProducts, IsActiveMember). Feature selection è utile.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.3411,
+    "churn_rate_test": 0.3413,
+    "baselines": {
+      "LogisticRegression": 0.7211,
+      "DecisionTree": 0.7126,
+      "RandomForest": 0.7381
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.7381,
+    "question_business": "Poche variabili guidano quasi tutto il rischio di churn nel vostro dataset. Quali azioni concrete la banca potrebbe intraprendere su queste leve?",
+    "question_technical": "Avete provato ad escludere feature poco informative? Ha migliorato le performance? Perché sì o perché no?"
+  },
+  {
+    "seed": 7,
+    "profile_name": "Forte effetto NumOfProducts",
+    "profile_desc": "Churn rate ~25%. Clienti con 3+ prodotti hanno churn rate >60%. Decision Tree con buona depth è competitivo.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.4185,
+    "churn_rate_test": 0.4187,
+    "baselines": {
+      "LogisticRegression": 0.7219,
+      "DecisionTree": 0.7327,
+      "RandomForest": 0.7396
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.7396,
+    "question_business": "I clienti multi-prodotto nel vostro dataset hanno un rischio di churn molto elevato. È controintuitivo: perché più prodotti = più rischio? Cosa proporreste?",
+    "question_technical": "Avete osservato un effetto 'a gradino' di NumOfProducts sul churn? Come si comportano i diversi modelli nel catturare questo pattern?"
+  },
+  {
+    "seed": 8,
+    "profile_name": "Pattern diffuso, modelli simili",
+    "profile_desc": "Churn rate ~20%. Segnale distribuito uniformemente su molte feature. Tutti i modelli performano in modo simile: l'argomentazione conta.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.2402,
+    "churn_rate_test": 0.24,
+    "baselines": {
+      "LogisticRegression": 0.6336,
+      "DecisionTree": 0.6114,
+      "RandomForest": 0.6286
+    },
+    "best_model": "LogisticRegression",
+    "best_auc": 0.6336,
+    "question_business": "I vostri modelli raggiungono performance simili. Come scegliereste il modello finale in uno scenario reale dove non c'è un vincitore chiaro?",
+    "question_technical": "Quando diversi modelli hanno AUC comparabile, quali altri criteri si possono usare per la selezione finale (interpretabilità, costo computazionale, ecc.)?"
+  },
+  {
+    "seed": 9,
+    "profile_name": "Churn molto alto, classe bilanciata",
+    "profile_desc": "Churn rate ~35%. Quasi bilanciato. Il class_weight ha meno impatto ma la soglia di classificazione diventa critica.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.47,
+    "churn_rate_test": 0.47,
+    "baselines": {
+      "LogisticRegression": 0.6658,
+      "DecisionTree": 0.6575,
+      "RandomForest": 0.6824
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.6824,
+    "question_business": "Un terzo dei clienti nel vostro dataset abbandona. Questo scenario suggerisce un problema sistemico. Quali azioni strutturali proporreste alla banca?",
+    "question_technical": "Con un churn rate ~35%, il dataset è quasi bilanciato. Come influenza questo la scelta di class_weight e della soglia di classificazione?"
+  },
+  {
+    "seed": 10,
+    "profile_name": "Clienti giovani, churn da inattività",
+    "profile_desc": "Churn rate ~19%. Popolazione giovane (media 30 anni). IsActiveMember è il fattore più predittivo.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.1456,
+    "churn_rate_test": 0.1453,
+    "baselines": {
+      "LogisticRegression": 0.6438,
+      "DecisionTree": 0.5792,
+      "RandomForest": 0.6167
+    },
+    "best_model": "LogisticRegression",
+    "best_auc": 0.6438,
+    "question_business": "I vostri clienti sono prevalentemente giovani. L'inattività sembra il fattore chiave di churn. Quale strategia di engagement proporreste?",
+    "question_technical": "IsActiveMember è la feature più predittiva. Come si comportano i diversi modelli nel catturare l'effetto di una singola feature binaria dominante?"
+  },
+  {
+    "seed": 11,
+    "profile_name": "Segnale nel Balance",
+    "profile_desc": "Churn rate ~22%. Clienti con saldo zero hanno churn rate molto diverso. La feature engineered balance_is_zero è molto utile.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.4274,
+    "churn_rate_test": 0.4273,
+    "baselines": {
+      "LogisticRegression": 0.6495,
+      "DecisionTree": 0.6857,
+      "RandomForest": 0.6927
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.6927,
+    "question_business": "Il saldo del conto è fortemente correlato con il churn nel vostro dataset. Come usereste questa informazione per segmentare i clienti?",
+    "question_technical": "Avete provato a creare la feature 'balance_is_zero'? Quanto ha migliorato le performance? Cosa ci dice sull'importanza del feature engineering?"
+  },
+  {
+    "seed": 12,
+    "profile_name": "Churn basso con outlier",
+    "profile_desc": "Churn rate ~10%. Pochi churner ma con pattern molto distinto. Recall è la metrica critica.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.2009,
+    "churn_rate_test": 0.2013,
+    "baselines": {
+      "LogisticRegression": 0.7466,
+      "DecisionTree": 0.7451,
+      "RandomForest": 0.7611
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.7611,
+    "question_business": "Solo il 10% dei clienti abbandona, ma ciascuno rappresenta una perdita significativa. Come bilancereste il costo di un falso allarme vs un churner perso?",
+    "question_technical": "Con un churn rate così basso, l'accuracy è fuorviante (un modello 'tutto No Churn' avrebbe 90%). Quale metrica avete privilegiato e perché?"
+  },
+  {
+    "seed": 13,
+    "profile_name": "Gender gap nel churn",
+    "profile_desc": "Churn rate ~23%. Forte differenza di churn tra generi. Solleva considerazioni di fairness.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.3231,
+    "churn_rate_test": 0.3233,
+    "baselines": {
+      "LogisticRegression": 0.6778,
+      "DecisionTree": 0.641,
+      "RandomForest": 0.6673
+    },
+    "best_model": "LogisticRegression",
+    "best_auc": 0.6778,
+    "question_business": "Nel vostro dataset c'è una forte differenza di churn tra generi. Come gestireste questa informazione da un punto di vista etico e regolatorio?",
+    "question_technical": "Se il modello usa Gender come feature predittiva importante, quali rischi di bias introduce? Avete provato a rimuovere la feature?"
+  },
+  {
+    "seed": 14,
+    "profile_name": "Segnale nel Tenure",
+    "profile_desc": "Churn rate ~20%. Clienti con bassa tenure hanno churn 3x. Il tempo di relazione è il predittore chiave.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.1794,
+    "churn_rate_test": 0.1793,
+    "baselines": {
+      "LogisticRegression": 0.7825,
+      "DecisionTree": 0.7589,
+      "RandomForest": 0.7783
+    },
+    "best_model": "LogisticRegression",
+    "best_auc": 0.7825,
+    "question_business": "I clienti più recenti nel vostro dataset hanno un rischio di churn molto più alto. Quale strategia di onboarding proporreste per i primi 2 anni?",
+    "question_technical": "Tenure è una feature ordinale (0-10). Come la trattano diversamente i modelli lineari vs tree-based? Avete notato differenze?"
+  },
+  {
+    "seed": 15,
+    "profile_name": "Multi-segnale bilanciato",
+    "profile_desc": "Churn rate ~21%. Segnale moderato su tutte le feature, nessun pattern dominante. Richiede analisi attenta.",
+    "n_rows_train": 8500,
+    "n_rows_test": 1500,
+    "churn_rate_train": 0.2784,
+    "churn_rate_test": 0.278,
+    "baselines": {
+      "LogisticRegression": 0.684,
+      "DecisionTree": 0.6626,
+      "RandomForest": 0.6877
+    },
+    "best_model": "RandomForest",
+    "best_auc": 0.6877,
+    "question_business": "Nessuna singola variabile domina il rischio di churn nel vostro dataset. Come impostereste una strategia di retention multi-fattoriale?",
+    "question_technical": "Quando il segnale è distribuito su molte feature, quale paradigma (bagging vs boosting) tende a funzionare meglio? Confermate sui vostri dati?"
+  }
+]

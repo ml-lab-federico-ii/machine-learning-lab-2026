@@ -117,6 +117,40 @@ Per installare: `pip install xgboost`.
 
 ---
 
+## Dashboard Docente (Live durante i pitch)
+
+La dashboard Streamlit permette di valutare i gruppi **uno alla volta** man mano
+che pitchano, e mostrare la leaderboard finale a fine sessione.
+
+### Avvio
+
+```bash
+streamlit run challenge/instructor_dashboard.py
+```
+
+VS Code nel Codespace aprirà automaticamente un popup "Open in Browser" sulla porta 8501.
+
+### Password
+
+La password di default è `churn2026`. Per cambiarla, modifica la costante
+`INSTRUCTOR_PASSWORD` in cima a `instructor_dashboard.py`.
+
+### Workflow in classe
+
+1. **Prima della sessione** — gli studenti copiano i `.joblib` in `challenge/submissions/`
+   (o tu li scarichi tu e li copi lì).
+2. **Durante i pitch** — vai su **Tab "Submissions"**: ogni `.joblib` trovato appare
+   come card con nome gruppo e modello. Al termine del pitch, clicca **"▶ Evaluta"**:
+   le metriche (AUC test, Δ, F1…) appaiono live con un bar chart comparativo.
+3. **Fine session** — vai su **Tab "Leaderboard"**: riepilogo ordinato per AUC test,
+   con righe evidenziate in verde (1° posto) e giallo (possibile overfitting Δ < −0.05).
+
+> **Nota**: i risultati vivono in memoria di sessione Streamlit. Non fare refresh duro
+> della pagina durante la sessione o si perdono. Usa "🔄 Rivaluta tutti" se hai bisogno
+> di ricalcolare dopo aver aggiunto file.
+
+---
+
 ## Valutazione Lato Docente (Test Set Nascosto)
 
 Gli studenti consegnano **due file** via email:
