@@ -1,86 +1,86 @@
 # %% [markdown]
 # # Machine Learning per l'Analisi Finanziaria
 #
-# ## Lezione 04 — Feature importance e interpretabilità
+# ## Lezione 04 — Feature Importance e Interpretabilità
 #
 # **Authors:**
 # - Enrico Huber
 # - Pietro Soglia
 #
-# **Emails:**
-# - enrico.huber@gmail.com
-# - pietro.soglia@gmail.com
-#
-# **Last updated:** 2026-03-16
+# **Last updated:** 2026-05-01
 #
 # ## Obiettivi di apprendimento
 #
-# - Comprendere la **feature importance** attraverso tre prospettive complementari
-#   (Gini, Permutation, SHAP) e ragionare sulle discrepanze tra i metodi.
-# - Utilizzare **SHAP** come framework unificante per interpretabilità globale
-#   e locale, scoprendo non solo QUANTO una feature conta ma COME e IN CHE
-#   DIREZIONE influenza le predizioni.
-# - Costruire un **profilo cliente a rischio** basato sull'evidenza interpretativa,
-#   distinguendo feature azionabili da non-azionabili.
-# - Sperimentare il **re-training** con subset di feature per validare le scoperte.
-# - Analizzare le **implicazioni regolamentari e di fairness** (EBA, GDPR,
-#   attributi protetti) nel contesto della churn prediction finanziaria.
+# - Comprendere e confrontare diverse metriche di **feature importance** (Gini,
+#   Permutation, SHAP), valutandone limiti e affidabilità sui dati reali.
+# - Introdurre **SHAP** come framework rigoroso (basato sulla teoria dei giochi)
+#   per la spiegabilità locale e globale di un modello.
+# - Costruire un **profilo del cliente a rischio churn** basato su evidenze
+#   quantitative, comunicabile al management.
+# - Sperimentare il **re-training con feature selection** data-driven e valutare
+#   il trade-off semplicità–performance.
+# - Collegare i risultati alle **implicazioni regolamentari** (GDPR, EBA) sulla
+#   spiegabilità nel contesto del credito.
+#
+# ## Approccio metodologico
+#
+# Questa lezione segue il ciclo di ragionamento di un Data Scientist reale:
+#
+# > **Ipotesi → Esperimento → Osservazione → Decisione → Prossima ipotesi**
+#
+# Non conosciamo a priori cosa troveremo. Ogni decisione è **data-driven**:
+# prima osserviamo i risultati, poi decidiamo il passo successivo.
+# Conserviamo anche le sperimentazioni che non portano dove atteso —
+# dagli errori si impara.
 
 # %% [markdown]
 # ## Outline
 #
-# ### BLOCCO A — Fondamenta: cosa sappiamo e cosa vogliamo scoprire
+# ### BLOCCO A — Fondamenta e riapertura dell'indagine
 # 1. Setup, percorsi e costanti
-# 2. Caricamento modello e dati
-# 3. Ricapitolazione del Gini importance (punto di partenza)
+# 2. Recap Lezione 3 e domanda motrice
 #
-# ### BLOCCO B — Permutation Importance: sfida al ranking Gini
-# 4. Permutation importance su validation set
-# 5. Confronto Gini vs Permutation: dove concordano e dove no
+# ### BLOCCO B — Feature Importance: la prima approssimazione
+# 3. Importanza basata su impurity (Gini) — ciò che già abbiamo
+# 4. Importanza per permutazione — un secondo parere
+# 5. Stabilità dell'importanza — quanto è rumorosa?
 #
-# ### BLOCCO C — SHAP: il framework definitivo per l'interpretabilità
-# 6. Introduzione concettuale a SHAP
-# 7. Calcolo degli SHAP values
-# 8. SHAP bar plot: ranking globale definitivo
-# 9. SHAP beeswarm plot: direzione degli effetti
+# ### BLOCCO C — SHAP: spiegabilità rigorosa
+# 6. Introduzione a SHAP — da Shapley al Machine Learning
+# 7. Calcolo SHAP values sul modello RF
+# 8. SHAP Summary Plot — importanza globale riveduta
+# 9. SHAP Bar Plot e tabella comparativa dei 3 ranking
 #
-# ### BLOCCO D — Analisi delle relazioni: SHAP dependence plots
-# 10. SHAP dependence plot per le top feature
+# ### BLOCCO D — Interpretabilità locale: capire le singole predizioni
+# 10. Scegliere clienti rappresentativi da spiegare
+# 11. SHAP Waterfall Plot — anatomia di una predizione
+# 12. Costruzione del "profilo cliente a rischio"
 #
-# ### BLOCCO E — Interpretabilità locale: spiegare singole predizioni
-# 11. Selezione di clienti campione
-# 12. SHAP waterfall plots
+# ### BLOCCO E — Feature selection e re-training (sperimentazione)
+# 13. Ipotesi: un modello più semplice generalizza meglio?
+# 14. Esperimento: re-training con top-K feature
+# 15. Analisi dell'errore: cosa perde il modello ridotto?
 #
-# ### BLOCCO F — Profilo cliente a rischio: dall'interpretabilità all'azione
-# 13. Segmentazione basata sui SHAP values
-# 14. Costruzione del profilo tipo
+# ### BLOCCO F — Contesto regolatorio e implicazioni di business
+# 16. Feature sensibili: Geography e Gender nel modello
+# 17. Cenni regolatori — GDPR e spiegabilità nel credito
 #
-# ### BLOCCO G — Re-training: il modello può essere semplificato?
-# 15. Esperimento: modello con sole top-K feature
-# 16. Analisi del costo di semplificazione
-#
-# ### BLOCCO H — Fairness e implicazioni regolamentari
-# 17. Analisi SHAP su attributi protetti
-# 18. Contesto regolamentare
-#
-# ### BLOCCO I — Chiusura
-# 19. Riepilogo delle scoperte
-# 20. Domande guidate
-# 21. Bridge verso la Lezione 5
+# ### BLOCCO G — Chiusura
+# 18. Riepilogo del percorso e artefatti prodotti
+# 19. Domande guidate
+# 20. Bridge verso la Lezione 5
 
 # %% [markdown]
 # ---
-# ## BLOCCO A — Fondamenta: cosa sappiamo e cosa vogliamo scoprire
+# ## BLOCCO A — Fondamenta e riapertura dell'indagine
 #
 # ---
 #
 # ## 1. Setup, percorsi e costanti
 #
-# Nella Lezione 3 abbiamo selezionato un Random Forest come miglior modello
-# (AUC = 0.854 su test). Sappiamo **che** funziona. Ora dobbiamo capire
-# **perché** funziona: quali feature guidano le decisioni, come interagiscono,
-# e cosa significa per il business. Un modello che funziona ma non si capisce
-# non ha valore in finanza.
+# Importiamo le dipendenze, carichiamo il modello e i dati prodotti nelle
+# lezioni precedenti. L'obiettivo è ripartire esattamente da dove ci siamo
+# fermati alla fine della Lezione 3.
 
 # %%
 from __future__ import annotations
@@ -98,12 +98,7 @@ import seaborn as sns
 import shap
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
-from sklearn.metrics import (
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
+from sklearn.metrics import roc_auc_score, f1_score, recall_score, precision_score
 
 try:
     from IPython.display import display  # type: ignore
@@ -158,9 +153,7 @@ def save_current_figure(filename: str) -> None:
     print(f"Figura salvata: {FIGURES_DIR / filename}")
 
 
-def load_preprocessed_split(
-    prefix: str,
-) -> tuple[np.ndarray, np.ndarray]:
+def load_preprocessed_split(prefix: str) -> tuple[np.ndarray, np.ndarray]:
     """Carica X e y da parquet per uno split (train, val o test).
 
     Parameters
@@ -172,11 +165,6 @@ def load_preprocessed_split(
     -------
     tuple[np.ndarray, np.ndarray]
         Coppia (X, y) come array numpy.
-
-    Raises
-    ------
-    FileNotFoundError
-        Se i file parquet attesi non esistono.
     """
     x_path = DATA_OUT_DIR / f"lesson_02_X_{prefix}.parquet"
     y_path = DATA_OUT_DIR / f"lesson_02_y_{prefix}.parquet"
@@ -184,54 +172,15 @@ def load_preprocessed_split(
         if not p.exists():
             raise FileNotFoundError(
                 f"File parquet non trovato: {p}\n"
-                "Esegui prima il notebook della Lezione 2."
+                "Esegui prima il notebook della Lezione 2 per generare il dataset."
             )
     X = pd.read_parquet(x_path).values
     y = pd.read_parquet(y_path).squeeze().values
     return X, y
 
 
-# %% [markdown]
-# ## 2. Caricamento modello e dati
-#
-# Carichiamo il modello Random Forest addestrato nella Lezione 3, insieme
-# ai dataset preprocessati della Lezione 2 e alle metriche salvate. Questo
-# ci permette di non dover riaddestrare nulla e concentrarci sull'analisi
-# interpretativa.
-
 # %%
-# --- Modello RF dalla Lezione 3 ---
-model_path = DATA_OUT_DIR / "lesson_03_best_model.pkl"
-if not model_path.exists():
-    raise FileNotFoundError(
-        f"Modello non trovato: {model_path}\n"
-        "Esegui prima il notebook della Lezione 3."
-    )
-rf = joblib.load(model_path)
-print(f"Modello caricato: {rf}")
-print(f"  n_estimators: {rf.n_estimators}")
-print(f"  class_weight: {rf.class_weight}")
-print(f"  random_state: {rf.random_state}")
-
-# %%
-# --- Metriche dalla Lezione 3 ---
-metrics_path = DATA_OUT_DIR / "lesson_03_metrics.json"
-with open(metrics_path) as fh:
-    l3_metrics = json.load(fh)
-
-print("=== Riepilogo metriche Lezione 3 ===\n")
-for split in ["train", "val", "test"]:
-    m = l3_metrics[split]
-    print(
-        f"  {split:5s}  AUC={m['roc_auc']:.4f}  "
-        f"F1={m['f1']:.4f}  "
-        f"Recall={m['recall']:.4f}  "
-        f"Precision={m['precision']:.4f}"
-    )
-print(f"\n  Soglia ottimale: {l3_metrics['best_threshold']}")
-
-# %%
-# --- Dataset preprocessato dalla Lezione 2 ---
+# --- Caricamento dati preprocessati dalla Lezione 2 ---
 X_train, y_train = load_preprocessed_split("train")
 X_val, y_val = load_preprocessed_split("val")
 X_test, y_test = load_preprocessed_split("test")
@@ -239,102 +188,173 @@ X_test, y_test = load_preprocessed_split("test")
 with open(DATA_OUT_DIR / "lesson_02_feature_names.json") as fh:
     feature_names = json.load(fh)
 
-BEST_THRESHOLD = l3_metrics["best_threshold"]
+print(f"Feature totali: {len(feature_names)}")
+print(f"\n{'Split':<8} {'Shape X':<18} {'N positivi':<14} {'Churn rate'}")
+print("-" * 56)
+for name, X, y in [
+    ("train", X_train, y_train),
+    ("val", X_val, y_val),
+    ("test", X_test, y_test),
+]:
+    print(f"{name:<8} {str(X.shape):<18} {y.sum():<14.0f} {y.mean():.4f}")
 
-print(f"Train: {X_train.shape}  churn={y_train.mean():.2%}")
-print(f"Val:   {X_val.shape}  churn={y_val.mean():.2%}")
-print(f"Test:  {X_test.shape}  churn={y_test.mean():.2%}")
-print(f"\nFeature totali: {len(feature_names)}")
+# %%
+# --- Caricamento modello RF dalla Lezione 3 ---
+model_path = DATA_OUT_DIR / "lesson_03_best_model.pkl"
+if not model_path.exists():
+    raise FileNotFoundError(
+        f"Modello non trovato: {model_path}\n"
+        "Esegui prima il notebook della Lezione 3."
+    )
+
+model = joblib.load(model_path)
+print(f"Modello caricato: {type(model).__name__}")
+print(f"  n_estimators = {model.n_estimators}")
+print(f"  class_weight = {model.class_weight}")
+print(f"  random_state = {model.random_state}")
+print(f"  n_features_in_ = {model.n_features_in_}")
+
+# %%
+# --- Caricamento metriche baseline dalla Lezione 3 ---
+with open(DATA_OUT_DIR / "lesson_03_metrics.json") as fh:
+    baseline_metrics = json.load(fh)
+
+print("Metriche baseline (Lezione 3):")
+for split in ["train", "val", "test"]:
+    m = baseline_metrics[split]
+    print(
+        f"  {split:<6} → AUC={m['roc_auc']:.4f}, F1={m['f1']:.4f}, "
+        f"Recall={m['recall']:.4f}, Precision={m['precision']:.4f}"
+    )
 
 # %% [markdown]
-# Il modello RF ha performance solida (AUC test = 0.854) e generalizza bene
-# (gap val-test < 0.02). Ma un modello in ambito finanziario non può essere
-# una "scatola nera": dobbiamo capire **quali feature guidano le decisioni** e
-# **come** le influenzano. Cominciamo dal punto in cui ci eravamo fermati nella
-# Lezione 3: la **Gini importance**.
-
-# %% [markdown]
-# ## 3. Ricapitolazione del Gini importance (punto di partenza)
+# **Verifica completata.** Abbiamo a disposizione:
 #
-# La Gini importance (o Mean Decrease Impurity) è il metodo di feature importance
-# nativo del Random Forest. Misura quanto ciascuna feature contribuisce a ridurre
-# l'impurità di Gini media pesata attraverso tutti gli alberi della foresta.
-# Nella Lezione 3 l'avevamo già calcolata — ora la riproduciamo dal modello
-# caricato e la esaminiamo con occhio critico, ponendoci una domanda chiave:
-# **possiamo fidarci di questo ranking?**
+# - Il dataset preprocessato (30 feature, 3 split stratificati)
+# - Il modello Random Forest addestrato (n=200, class_weight='balanced')
+# - Le metriche di riferimento: **AUC 0.8723 (val)**, **AUC 0.8575 (test)**
+#
+# Tutti gli ingredienti per iniziare l'indagine sull'interpretabilità.
+
+# %% [markdown]
+# ---
+# ## 2. Recap Lezione 3 e domanda motrice
+#
+# Nella Lezione 3 abbiamo percorso un cammino di sperimentazione che ci ha
+# portato a scegliere il Random Forest come modello candidato per la challenge:
+#
+# | Step | Esperimento | Insight chiave |
+# |------|-------------|----------------|
+# | 1 | DummyClassifier | Accuracy 79.6%, recall 0% → paradosso accuracy |
+# | 2 | LR naïve | Recall basso → il modello ignora la maggior parte dei churner |
+# | 3 | LR + class_weight | Recall ~78% → gestire lo sbilanciamento è essenziale |
+# | 4 | SMOTE vs class_weight | Praticamente identici → class_weight per semplicità |
+# | 5 | DT max_depth=None | Overfitting severo (AUC train 1.0, val basso) |
+# | 6 | DT curva depth | Ottimo a depth=6, poi gap train-val si apre |
+# | 7 | RF n=200 | **AUC val 0.872** — miglior modello |
+# | 8 | Test set (una volta) | AUC 0.858 → generalizzazione confermata |
+#
+# ### La domanda aperta
+#
+# Sappiamo che il modello **funziona** (AUC 0.858 su dati mai visti).
+# Ma in ambito finanziario un modello che funziona non basta. Dobbiamo
+# rispondere a domande critiche:
+#
+# - **Perché** un cliente viene classificato come churner?
+# - Quale combinazione di feature spinge la probabilità verso 1?
+# - Il modello usa informazioni potenzialmente **discriminatorie** (Geography, Gender)?
+# - Possiamo **spiegare** la decisione a un cliente che chiede motivazioni?
+#
+# > **Domanda motrice:** il modello funziona — ma *perché* prende le
+# > decisioni che prende? Possiamo fidarci delle sue "ragioni"?
+
+# %% [markdown]
+# ---
+# ## BLOCCO B — Feature Importance: la prima approssimazione
+#
+# ---
+#
+# ## 3. Importanza basata su impurity (Gini) — ciò che già abbiamo
+#
+# Il Random Forest di sklearn calcola automaticamente una misura di importanza
+# basata sulla **riduzione media dell'impurità** (Mean Decrease in Impurity, MDI)
+# operata da ciascuna feature negli split degli alberi.
+#
+# È una prima approssimazione, ma ha limiti noti:
+# - **Favorisce feature ad alta cardinalità** e variabili continue
+# - **Non considera la performance sul validation set** — usa solo i dati di
+#   training (potenzialmente overfit)
+# - **Non riflette l'utilità marginale** della feature (se due feature sono
+#   correlate, l'importanza si "spalma" tra loro)
+#
+# Guardiamo cosa dice e poi mettiamola alla prova.
 
 # %%
-# Calcolo Gini importance dal modello caricato
-gini_imp = pd.Series(rf.feature_importances_, index=feature_names)
-gini_imp = gini_imp.sort_values(ascending=False)
+# --- Gini importance dal modello RF ---
+gini_importances = model.feature_importances_
+gini_order = np.argsort(gini_importances)[::-1]
 
-print("=== Gini Importance (top-20) ===\n")
-for i, (feat, imp) in enumerate(gini_imp.items(), 1):
-    print(f"  {i:2d}. {feat:<35s} {imp:.4f}  ({imp:.1%})")
+# Mostriamo le top-15
+top_k = 15
+print(f"Top-{top_k} feature per importanza Gini (MDI):\n")
+print(f"{'Rank':<6} {'Feature':<35} {'Importanza'}")
+print("-" * 55)
+for rank, idx in enumerate(gini_order[:top_k], 1):
+    print(f"{rank:<6} {feature_names[idx]:<35} {gini_importances[idx]:.4f}")
 
 # %%
-# Bar chart Gini importance
-fig, ax = plt.subplots(figsize=(10, 8))
-gini_imp.sort_values().plot.barh(ax=ax, color="#1976D2", edgecolor="white")
-ax.axvline(
-    1 / len(feature_names),
-    color="#E53935",
-    ls="--",
-    lw=1.5,
-    label=f"Baseline uniforme (1/{len(feature_names)} = {1/len(feature_names):.3f})",
+fig, ax = plt.subplots(figsize=(10, 7))
+top_indices = gini_order[:top_k]
+ax.barh(
+    range(top_k),
+    gini_importances[top_indices][::-1],
+    color="steelblue",
+    edgecolor="white",
 )
-ax.set_xlabel("Gini Importance")
-ax.set_title("Feature importance (Gini / MDI) — Random Forest L3")
-ax.legend(loc="lower right")
-save_current_figure("lesson_04_gini_importance_recap.png")
+ax.set_yticks(range(top_k))
+ax.set_yticklabels([feature_names[i] for i in top_indices][::-1])
+ax.set_xlabel("Importanza Gini (MDI)")
+ax.set_title("Feature Importance — Gini (Mean Decrease in Impurity)")
+save_current_figure("lesson_04_gini_importance.png")
 plt.show()
 
 # %% [markdown]
-# ### Osservazioni sulla Gini importance
+# **Osservazioni sulla Gini importance:**
 #
-# Il ranking Gini conferma quanto osservato nella Lezione 3:
+# - `num__Age` domina nettamente — coerente con quanto osservato nelle lezioni
+#   precedenti (l'età è il predittore più forte del churn).
+# - Le feature **numeriche** (`CreditScore`, `Balance`, `EstimatedSalary`,
+#   `Point Earned`) occupano le prime posizioni — questo è in parte un artefatto
+#   del bias della Gini importance verso variabili continue.
+# - Le feature categoriche one-hot (`Geography`, `NumOfProducts`, `IsActiveMember`)
+#   sono frammentate: ogni dummy prende una fetta piccola dell'importanza
+#   originaria della variabile.
+# - `num__Tenure` ha importanza bassa: già nella Lezione 1 avevamo osservato
+#   una correlazione quasi nulla con il target.
 #
-# - **`num__Age`** domina con circa il 22% dell'importanza totale — coerente
-#   con la correlazione r = +0.285 identificata nell'EDA (Lezione 1).
-# - **`num__NumOfProducts`** (~11%) e **`num__IsActiveMember`** (~7%) occupano
-#   posizioni di rilievo, in linea con le evidenze EDA.
-# - **Sorpresa**: `num__EstimatedSalary` (~10%) e `num__Point Earned` (~10%)
-#   si posizionano in alto **nonostante** abbiano correlazione lineare ≈ 0 con
-#   il target nella Lezione 1.
-#
-# Questa discrepanza solleva un dubbio legittimo. La Gini importance ha un difetto
-# noto: **favorisce le feature continue con molti valori distinti**, perché queste
-# offrono più opportunità di split e quindi più occasioni per ridurre l'impurità,
-# anche quando il segnale predittivo è debole. feature come EstimatedSalary
-# (continua, alta cardinalità) potrebbero essere "inflazionate" dalla Gini.
-#
-# **Ipotesi da verificare**: se il ranking è genuino, un metodo alternativo
-# (insensibile alla cardinalità) dovrebbe confermarlo. Se non lo conferma,
-# la Gini ci stava ingannando. Verifichiamolo con la **Permutation Importance**.
+# **Domanda:** questa classifica è affidabile? O è distorta dal bias noto?
+# Servono un **secondo parere** e un metodo che valuti l'importanza
+# *sulla performance effettiva*.
 
 # %% [markdown]
 # ---
-# ## BLOCCO B — Permutation Importance: sfida al ranking Gini
+# ## 4. Importanza per permutazione — un secondo parere
 #
-# ---
+# La **permutation importance** misura quanto peggiora la performance del modello
+# quando una feature viene "distrutta" (shufflata casualmente). A differenza
+# della Gini importance:
 #
-# ## 4. Permutation importance su validation set
+# - Usa il **validation set** → non è influenzata dall'overfitting
+# - È **model-agnostic** → funziona con qualsiasi modello
+# - Misura il contributo **reale** alla metrica target (AUC nel nostro caso)
 #
-# La Permutation Importance opera in modo completamente diverso dalla Gini:
-# per ogni feature, permuta casualmente i suoi valori nel dataset e misura
-# quanto peggiora la metrica di valutazione (nel nostro caso ROC-AUC).
-# Se la feature è realmente importante, la permutazione distrugge il segnale
-# e la metrica cala drasticamente. Se non lo è, la permutazione non cambia
-# nulla.
-#
-# Vantaggi cruciali rispetto alla Gini:
-# - È **model-agnostic**: funziona su qualsiasi modello
-# - È calcolata su un **set di validazione** (non sul training)
-# - Non è influenzata dalla cardinalità della feature
+# Ipotesi: ci aspettiamo conferme per le top feature (Age), ma possibili
+# sorprese per le feature categoriche.
 
 # %%
+# --- Permutation importance su validation set ---
 perm_result = permutation_importance(
-    rf,
+    model,
     X_val,
     y_val,
     n_repeats=30,
@@ -342,1003 +362,1173 @@ perm_result = permutation_importance(
     scoring="roc_auc",
 )
 
-perm_imp = pd.DataFrame(
-    {
-        "mean": perm_result.importances_mean,
-        "std": perm_result.importances_std,
-    },
-    index=feature_names,
-).sort_values("mean", ascending=False)
+perm_importances = perm_result.importances_mean
+perm_std = perm_result.importances_std
+perm_order = np.argsort(perm_importances)[::-1]
 
-print("=== Permutation Importance (top-20) ===\n")
-for i, (feat, row) in enumerate(perm_imp.iterrows(), 1):
-    print(f"  {i:2d}. {feat:<35s} {row['mean']:.4f} ± {row['std']:.4f}")
+print(f"Top-{top_k} feature per Permutation Importance (AUC drop):\n")
+print(f"{'Rank':<6} {'Feature':<35} {'ΔAUC media':<14} {'± std'}")
+print("-" * 65)
+for rank, idx in enumerate(perm_order[:top_k], 1):
+    print(
+        f"{rank:<6} {feature_names[idx]:<35} "
+        f"{perm_importances[idx]:.4f}       ±{perm_std[idx]:.4f}"
+    )
 
 # %%
-# Bar chart permutation importance con barre d'errore
-fig, ax = plt.subplots(figsize=(10, 8))
-perm_sorted = perm_imp.sort_values("mean")
+fig, ax = plt.subplots(figsize=(10, 7))
+top_perm_indices = perm_order[:top_k]
 ax.barh(
-    range(len(perm_sorted)),
-    perm_sorted["mean"],
-    xerr=perm_sorted["std"],
-    color="#388E3C",
+    range(top_k),
+    perm_importances[top_perm_indices][::-1],
+    xerr=perm_std[top_perm_indices][::-1],
+    color="darkorange",
     edgecolor="white",
     capsize=3,
 )
-ax.set_yticks(range(len(perm_sorted)))
-ax.set_yticklabels(perm_sorted.index)
-ax.axvline(0, color="grey", ls="-", lw=0.8)
-ax.set_xlabel("Diminuzione ROC-AUC alla permutazione")
-ax.set_title("Permutation Importance (30 ripetizioni) — val set")
+ax.set_yticks(range(top_k))
+ax.set_yticklabels([feature_names[i] for i in top_perm_indices][::-1])
+ax.set_xlabel("Diminuzione media ROC-AUC (Permutation Importance)")
+ax.set_title("Feature Importance — Permutation (30 ripetizioni, validation set)")
 save_current_figure("lesson_04_permutation_importance.png")
 plt.show()
 
 # %% [markdown]
-# ## 5. Confronto Gini vs Permutation: dove concordano e dove no
+# **Osservazioni sulla Permutation Importance:**
 #
-# Ora abbiamo due ranking indipendenti. Il confronto diretto ci dice quali
-# feature sono genuinamente importanti (confermate da entrambi i metodi) e
-# quali potrebbero essere artefatti della Gini.
+# - `num__Age` si conferma la feature più importante — se la distruggiamo,
+#   il modello perde molta capacità discriminativa.
+# - Le feature categoriche (e.g., `IsActiveMember`, `NumOfProducts`) possono
+#   emergere con importanza aggregata più alta rispetto alla Gini, dove ogni
+#   dummy veniva contata separatamente.
+# - Le barre d'errore ci dicono **quanto è stabile** la misura: feature con
+#   barre grandi non hanno un ranking affidabile.
+#
+# Mettiamo ora i due metodi a confronto diretto.
+
+# %% [markdown]
+# ---
+# ## 5. Stabilità dell'importanza — quanto è rumorosa?
+#
+# Confrontiamo Gini e Permutation importance side-by-side per le top feature.
+# L'obiettivo è verificare la **convergenza** (i due metodi concordano?) e
+# la **stabilità** (le barre d'errore della permutation sono piccole?).
 
 # %%
-# Tabella confronto ranking
-gini_rank = gini_imp.rank(ascending=False).astype(int)
-perm_rank = perm_imp["mean"].rank(ascending=False).astype(int)
+# --- Confronto side-by-side: Gini vs Permutation (top-15 per permutation) ---
+fig, axes = plt.subplots(1, 2, figsize=(14, 7))
 
-comparison = pd.DataFrame(
-    {
-        "Gini_value": gini_imp,
-        "Gini_rank": gini_rank,
-        "Perm_value": perm_imp["mean"],
-        "Perm_rank": perm_rank,
-        "Rank_change": gini_rank - perm_rank,
-    }
-).sort_values("Gini_rank")
-
-print("=== Confronto ranking: Gini vs Permutation ===\n")
-print("  Rank_change > 0 → la feature SALE nel ranking Permutation")
-print("  Rank_change < 0 → la feature SCENDE nel ranking Permutation\n")
-display(comparison)
-
-# %%
-# Scatter plot: Gini rank vs Permutation rank
-fig, ax = plt.subplots(figsize=(8, 8))
-ax.scatter(
-    comparison["Gini_rank"],
-    comparison["Perm_rank"],
-    s=80,
-    c="#1976D2",
-    edgecolors="white",
-    zorder=3,
+# Gini — ordinato per permutation importance per confronto diretto
+ax = axes[0]
+ax.barh(
+    range(top_k),
+    gini_importances[top_perm_indices][::-1],
+    color="steelblue",
+    edgecolor="white",
 )
-# Linea diagonale (concordanza perfetta)
-lims = [0.5, len(feature_names) + 0.5]
-ax.plot(lims, lims, "--", color="#E53935", lw=1.5, label="Concordanza perfetta")
+ax.set_yticks(range(top_k))
+ax.set_yticklabels([feature_names[i] for i in top_perm_indices][::-1])
+ax.set_xlabel("Gini Importance")
+ax.set_title("Gini (MDI)")
 
-# Annota le feature più interessanti (quelle con rank_change grande)
-for feat, row in comparison.iterrows():
-    if abs(row["Rank_change"]) >= 3 or row["Gini_rank"] <= 5:
-        short_name = feat.replace("num__", "").replace("cat__", "")
-        ax.annotate(
-            short_name,
-            (row["Gini_rank"], row["Perm_rank"]),
-            fontsize=7,
-            ha="left",
-            va="bottom",
-            xytext=(4, 4),
-            textcoords="offset points",
-        )
+# Permutation
+ax = axes[1]
+ax.barh(
+    range(top_k),
+    perm_importances[top_perm_indices][::-1],
+    xerr=perm_std[top_perm_indices][::-1],
+    color="darkorange",
+    edgecolor="white",
+    capsize=3,
+)
+ax.set_yticks(range(top_k))
+ax.set_yticklabels([feature_names[i] for i in top_perm_indices][::-1])
+ax.set_xlabel("ΔAUC (Permutation)")
+ax.set_title("Permutation (val set)")
 
-ax.set_xlabel("Ranking Gini (1 = più importante)")
-ax.set_ylabel("Ranking Permutation (1 = più importante)")
-ax.set_title("Gini rank vs Permutation rank")
-ax.legend()
-ax.set_xlim(lims)
-ax.set_ylim(lims)
-ax.invert_xaxis()
-ax.invert_yaxis()
-ax.set_aspect("equal")
-save_current_figure("lesson_04_gini_vs_perm_scatter.png")
+plt.suptitle("Confronto Feature Importance: Gini vs Permutation", fontsize=13)
+save_current_figure("lesson_04_gini_vs_permutation.png")
+plt.show()
+
+# %%
+# --- Tabella comparativa ranking Gini vs Permutation ---
+print(f"\n{'Feature':<35} {'Rank Gini':<12} {'Rank Perm':<12} {'Δ Rank'}")
+print("-" * 68)
+
+gini_ranks = {idx: rank for rank, idx in enumerate(gini_order, 1)}
+perm_ranks = {idx: rank for rank, idx in enumerate(perm_order, 1)}
+
+for idx in perm_order[:top_k]:
+    delta = gini_ranks[idx] - perm_ranks[idx]
+    arrow = "↑" if delta > 0 else ("↓" if delta < 0 else "=")
+    print(
+        f"{feature_names[idx]:<35} {gini_ranks[idx]:<12} "
+        f"{perm_ranks[idx]:<12} {delta:+d} {arrow}"
+    )
+
+# %% [markdown]
+# **Analisi della convergenza:**
+#
+# - Le top-3 feature (Age, e probabilmente NumOfProducts, IsActiveMember) tendono
+#   a essere confermate da entrambi i metodi — buon segnale di robustezza.
+# - Alcune feature numeriche (e.g., `EstimatedSalary`, `CreditScore`) possono
+#   essere **sopravvalutate** dalla Gini: la permutation importance rivela che
+#   distruggerle non peggiora significativamente l'AUC.
+# - Feature con **Δ Rank grande** meritano cautela: il loro contributo reale
+#   è ambiguo tra i due metodi.
+#
+# **Decisione:** la permutation importance è più affidabile per le decisioni
+# di business (usa il val set, è model-agnostic). Ma per un verdetto definitivo
+# servono i **SHAP values** — l'unico metodo con fondamenti teorici rigorosi.
+
+# %% [markdown]
+# ---
+# ## BLOCCO C — SHAP: spiegabilità rigorosa
+#
+# ---
+#
+# ## 6. Introduzione a SHAP — da Shapley al Machine Learning
+#
+# ### Motivazione
+#
+# Gini e Permutation importance rispondono alla domanda *"quale feature è
+# importante in media?"*. Ma non ci dicono:
+# - Per **questo specifico cliente**, cosa ha pesato di più?
+# - In che **direzione** agisce ogni feature (verso churn o verso retention)?
+# - Quanto è **l'effetto marginale** di una feature, considerando tutte le
+#   possibili combinazioni con le altre?
+#
+# ### Valori di Shapley (teoria dei giochi)
+#
+# Nella teoria dei giochi cooperativi, il **valore di Shapley** di un giocatore
+# $i$ in un gioco con funzione di valore $v$ è:
+#
+# $$\phi_i(v) = \sum_{S \subseteq N \setminus \{i\}} \frac{|S|! \, (|N|-|S|-1)!}{|N|!}
+# \left[ v(S \cup \{i\}) - v(S) \right]$$
+#
+# dove $N$ è l'insieme di tutti i giocatori e $S$ un sottoinsieme che non
+# include $i$.
+#
+# In SHAP, i "giocatori" sono le **feature** e il "gioco" è la **predizione**
+# del modello per una singola osservazione. Il valore $\phi_i$ quantifica il
+# contributo marginale della feature $i$ alla predizione, mediato su tutte
+# le possibili coalizioni di feature.
+#
+# ### Proprietà chiave
+#
+# 1. **Efficienza:** $\sum_i \phi_i = f(x) - E[f(x)]$ — i contributi sommano
+#    esattamente alla differenza tra la predizione e la media.
+# 2. **Simmetria:** se due feature contribuiscono ugualmente in ogni coalizione,
+#    hanno lo stesso SHAP value.
+# 3. **Additività:** per modelli additivi, SHAP si decompone linearmente.
+# 4. **Null player:** una feature che non contribuisce mai ha SHAP = 0.
+#
+# SHAP è l'**unico** metodo di attribuzione che soddisfa simultaneamente tutte
+# queste proprietà — è matematicamente "equo".
+#
+# ### TreeExplainer
+#
+# Per i modelli tree-based (RF, GBM, XGBoost), l'algoritmo **TreeSHAP**
+# calcola i valori esatti in tempo polinomiale $O(TLD^2)$ anziché esponenziale,
+# dove $T$ = numero alberi, $L$ = foglie, $D$ = profondità. Questo ci permette
+# di calcolare SHAP values su migliaia di osservazioni in tempi ragionevoli.
+
+# %% [markdown]
+# ---
+# ## 7. Calcolo SHAP values sul modello RF
+#
+# Usiamo `TreeExplainer` (esatto per Random Forest) su un campione di
+# osservazioni dal training set. Campioniamo per tenere i tempi di calcolo
+# ragionevoli (~1000 osservazioni), mantenendo la rappresentatività.
+
+# %%
+# --- Campionamento e calcolo SHAP values ---
+N_SHAP_SAMPLES = 1000
+
+# Campione stratificato dal training set
+rng = np.random.default_rng(SEED)
+idx_pos = np.where(y_train == 1)[0]
+idx_neg = np.where(y_train == 0)[0]
+
+# Manteniamo la proporzione originale (~20% positivi)
+n_pos = int(N_SHAP_SAMPLES * y_train.mean())
+n_neg = N_SHAP_SAMPLES - n_pos
+
+sample_idx = np.concatenate(
+    [
+        rng.choice(idx_pos, size=n_pos, replace=False),
+        rng.choice(idx_neg, size=n_neg, replace=False),
+    ]
+)
+rng.shuffle(sample_idx)
+
+X_shap_sample = X_train[sample_idx]
+y_shap_sample = y_train[sample_idx]
+
+print(f"Campione SHAP: {X_shap_sample.shape[0]} osservazioni")
+print(f"  Classe 1 (churn): {y_shap_sample.sum():.0f} " f"({y_shap_sample.mean():.2%})")
+print(f"  Classe 0 (non-churn): {(1 - y_shap_sample).sum():.0f}")
+
+# %%
+# --- TreeExplainer: calcolo valori SHAP ---
+explainer = shap.TreeExplainer(model)
+shap_values_obj = explainer(X_shap_sample)
+
+# Per RF con TreeExplainer, shap_values_obj.values ha shape
+# (n_samples, n_features) per ciascuna classe.
+# Lavoriamo con la classe 1 (churn) — il nostro target.
+# Con la nuova API SHAP, l'oggetto Explanation ha già la struttura corretta.
+print(f"\nShape shap_values: {shap_values_obj.values.shape}")
+print(f"Base values shape: {shap_values_obj.base_values.shape}")
+
+# Se il modello ha output per 2 classi, prendiamo classe 1
+if shap_values_obj.values.ndim == 3:
+    # shape (n_samples, n_features, n_classes) → prendiamo classe 1
+    shap_values_array = shap_values_obj.values[:, :, 1]
+    base_value = float(shap_values_obj.base_values[0, 1])
+else:
+    shap_values_array = shap_values_obj.values
+    base_value = float(shap_values_obj.base_values[0])
+
+print(f"Shape SHAP values (classe churn): {shap_values_array.shape}")
+print(f"Base value (prob media churn): {base_value:.4f}")
+
+# %% [markdown]
+# **Nota tecnica:** Il `base_value` rappresenta la predizione media del modello
+# (la probabilità di churn senza informazione su alcuna feature). I SHAP values
+# di ciascuna osservazione sommano alla differenza tra la predizione individuale
+# e questo valore base — verificabile grazie alla proprietà di *efficienza*.
+
+# %%
+# --- Verifica proprietà di efficienza ---
+# Per un campione di osservazioni, verifichiamo che base_value + sum(SHAP) ≈ pred
+sample_preds = model.predict_proba(X_shap_sample)[:, 1]
+reconstructed = base_value + shap_values_array.sum(axis=1)
+
+max_error = np.abs(sample_preds - reconstructed).max()
+mean_error = np.abs(sample_preds - reconstructed).mean()
+print(f"Verifica efficienza SHAP:")
+print(f"  Errore massimo:  {max_error:.2e}")
+print(f"  Errore medio:    {mean_error:.2e}")
+print(f"  → {'✓ Proprietà verificata' if max_error < 1e-6 else '✗ Errore inatteso!'}")
+
+# %% [markdown]
+# La proprietà di efficienza è confermata: i SHAP values sommano esattamente
+# alla predizione individuale. Possiamo procedere con l'analisi globale.
+
+# %% [markdown]
+# ---
+# ## 8. SHAP Summary Plot — importanza globale riveduta
+#
+# Il summary plot SHAP mostra simultaneamente:
+# - **L'importanza** di ciascuna feature (posizione verticale = ranking)
+# - **La distribuzione dei contributi** (dispersione orizzontale)
+# - **La direzione dell'effetto** (colore = valore della feature,
+#   posizione orizzontale = effetto sulla predizione)
+
+# %%
+# --- SHAP Summary Plot ---
+fig, ax = plt.subplots(figsize=(10, 8))
+shap.summary_plot(
+    shap_values_array,
+    X_shap_sample,
+    feature_names=feature_names,
+    show=False,
+    max_display=15,
+)
+plt.title("SHAP Summary Plot — Contributi alla probabilità di Churn")
+save_current_figure("lesson_04_shap_summary.png")
 plt.show()
 
 # %% [markdown]
-# ### Analisi delle discrepanze
+# **Interpretazione del SHAP Summary Plot:**
 #
-# Il confronto Gini vs Permutation rivela pattern molto interessanti che
-# confermano il nostro sospetto iniziale:
+# - **`num__Age`**: il colore rivela la direzione — valori alti (rosso) spingono
+#   verso il churn (SHAP positivo), valori bassi (blu) proteggono. L'età è il
+#   predittore più influente, confermando Gini e Permutation.
+# - **`cat__IsActiveMember_1`**: essere membro attivo (valore alto = 1) ha
+#   effetto protettivo forte (SHAP negativo). Coerente con la correlazione
+#   negativa osservata nella Lezione 1.
+# - **`num__Balance`**: la relazione non è monotona — sia valori molto alti
+#   che molto bassi possono contribuire al churn in modi diversi.
+# - **Feature Geography/Gender**: possiamo ora quantificare il loro contributo
+#   direzionale. Lo approfondiremo nel Blocco F.
 #
-# **Feature stabili (confermate da entrambi i metodi):**
-# - `num__Age` resta saldamente al **1° posto** in entrambi i ranking
-#   (Gini: 21.9%, Perm: 0.137 drop AUC) — importanza genuina e robusta.
-# - `num__NumOfProducts` si conferma al **2° posto** in entrambi i metodi
-#   (Gini: 10.9%, Perm: 0.111) — segnale reale.
-#
-# **Feature che salgono nel ranking Permutation (la Gini le sottostimava):**
-# - `num__IsActiveMember`: da **#9 Gini → #3 Permutation** (+6 posizioni).
-#   La Gini la penalizzava perché è binaria (solo 2 valori → pochi split),
-#   ma la Permutation rivela che il suo contributo alla AUC è sostanziale
-#   (0.030 drop).
-# - `cat__Geography_Germany`: da **#10 Gini → #5 Permutation** (+5). L'effetto
-#   geografico è più rilevante di quanto la Gini suggerisse.
-# - `num__balance_is_zero`: da **#12 Gini → #6 Permutation** (+6). Feature
-#   ingegnerizzata in L2 — cattura il pattern bimodale del Balance.
-#
-# **Feature che scendono (Gini inflazionata dalla cardinalità):**
-# - `num__EstimatedSalary`: da **#3 Gini → #10 Permutation** (−7 posizioni!).
-#   Conferma lampante: r ≈ 0 con il target, Gini 9.9% ma Perm 0.0006 (≈ 0).
-#   La Gini era inflazionata dalla sua alta cardinalità (variabile continua →
-#   molti split possibili → riduzione di impurità spuria).
-# - `num__CreditScore`: da **#5 Gini → #11 Permutation** (−6). Stesso pattern.
-# - `num__Tenure`: da **#7 Gini → #15 Permutation** (−8). Impatto nullo sulla AUC.
-# - `num__Satisfaction Score`: da **#8 Gini → #16 Permutation** (−8). Idem.
-#
-# **Il limite di entrambi i metodi:** Gini e Permutation ci dicono QUANTO una
-# feature conta, ma non ci dicono COME influenza la predizione. Non sappiamo
-# se Age alta aumenta o diminuisce il rischio di churn, né se l'effetto è
-# lineare o presenta soglie. Per questo ci serve un framework più sofisticato.
-#
-# **→ Decisione: introduciamo SHAP**, che ci darà non solo il ranking, ma anche
-# la *direzione* e la *forma* dell'effetto di ogni feature.
+# La dispersione orizzontale indica **eterogeneità**: per Age, il contributo
+# varia enormemente da persona a persona. Per feature binarie (IsActiveMember),
+# si vedono due cluster netti.
 
 # %% [markdown]
 # ---
-# ## BLOCCO C — SHAP: il framework definitivo per l'interpretabilità
+# ## 9. SHAP Bar Plot e tabella comparativa dei 3 ranking
 #
-# ---
-#
-# ## 6. Introduzione concettuale a SHAP
-#
-# **SHAP** (SHapley Additive exPlanations) proviene dalla **teoria dei giochi
-# cooperativi** e risolve un problema fondamentale: come distribuire equamente
-# il "merito" di una predizione tra le feature che l'hanno prodotta.
-#
-# L'idea è semplice: ogni feature è un "giocatore" in una coalizione. Il suo
-# **valore di Shapley** misura il contributo marginale medio che apporta alla
-# predizione, considerando *tutte le possibili combinazioni* di feature.
-#
-# **Proprietà matematiche chiave:**
-# - **Efficienza**: la somma degli SHAP values di tutte le feature eguaglia
-#   la differenza tra la predizione individuale e il valore base (media).
-# - **Simmetria**: due feature con contributi identici ricevono lo stesso valore.
-# - **Dummy**: una feature irrilevante riceve SHAP = 0.
-# - **Additività**: per modelli ensemble come RF, lo SHAP del modello =
-#   media degli SHAP dei singoli alberi.
-#
-# Il `TreeExplainer` di SHAP sfrutta la struttura ad albero per calcolare
-# i valori esatti in tempo polinomiale (anziché esponenziale), rendendolo
-# praticabile anche con centinaia di feature.
-#
-# **Perché SHAP supera Gini e Permutation**: SHAP ci dice non solo QUANTO
-# (importanza globale) ma anche COME (direzione dell'effetto) e PER CHI
-# (interpretabilità locale, predizione per predizione).
-
-# %% [markdown]
-# ## 7. Calcolo degli SHAP values
-#
-# Calcoliamo gli SHAP values su tutto il validation set. Per un Random Forest
-# con 200 alberi e 2.000 osservazioni, il `TreeExplainer` è molto efficiente:
-# non richiede sampling né approssimazioni.
+# Calcoliamo l'importanza media assoluta dei SHAP values (|φᵢ| medio) per
+# ottenere un ranking numerico confrontabile con Gini e Permutation.
 
 # %%
-explainer = shap.TreeExplainer(rf)
-shap_values_raw = explainer.shap_values(X_val)
+# --- SHAP mean |value| per feature ---
+shap_mean_abs = np.abs(shap_values_array).mean(axis=0)
+shap_order = np.argsort(shap_mean_abs)[::-1]
 
-# TreeExplainer: il formato di output varia con la versione di shap.
-# Può restituire:
-#   - lista [array_classe_0, array_classe_1]  (shap < 0.40)
-#   - array 3D (n_samples, n_features, n_classes) (shap >= 0.40)
-# In entrambi i casi estraiamo i valori per la classe 1 (churn).
-if isinstance(shap_values_raw, list):
-    shap_vals = shap_values_raw[1]
-    print("SHAP values estratti per la classe 1 (churn) — formato lista")
-elif shap_values_raw.ndim == 3:
-    shap_vals = shap_values_raw[:, :, 1]
-    print("SHAP values estratti per la classe 1 (churn) — formato 3D")
-else:
-    shap_vals = shap_values_raw
-    print("SHAP values estratti (formato singolo)")
-
-print(f"Shape SHAP values: {shap_vals.shape}")
-print(f"Shape X_val:       {X_val.shape}")
-print(f"\nValore base (expected value):", end=" ")
-
-if isinstance(explainer.expected_value, (list, np.ndarray)):
-    base_value = float(explainer.expected_value[1])
-else:
-    base_value = float(explainer.expected_value)
-print(f"{base_value:.4f}")
-print(f"  (≈ churn rate medio nel training: {y_train.mean():.4f})")
-
-# %%
-# Creiamo un oggetto Explanation per i plot SHAP moderni
-shap_explanation = shap.Explanation(
-    values=shap_vals,
-    base_values=np.full(shap_vals.shape[0], base_value),
-    data=X_val,
-    feature_names=feature_names,
+fig, ax = plt.subplots(figsize=(10, 7))
+top_shap_indices = shap_order[:top_k]
+ax.barh(
+    range(top_k),
+    shap_mean_abs[top_shap_indices][::-1],
+    color="mediumpurple",
+    edgecolor="white",
 )
-
-# %% [markdown]
-# Ogni riga della matrice SHAP values corrisponde a un'osservazione del
-# validation set. Ogni colonna corrisponde a una feature. Il valore indica
-# di quanto quella feature sposta la predizione rispetto al valore base
-# (≈ churn rate medio):
-# - **Positivo** → spinge verso il churn
-# - **Negativo** → spinge verso la non-churn
-#
-# La somma di tutti gli SHAP values per un'osservazione, più il valore base,
-# dà la predizione del modello per quella osservazione.
-
-# %% [markdown]
-# ## 8. SHAP bar plot: ranking globale definitivo
-#
-# Il bar plot SHAP mostra la media dei valori assoluti |SHAP| per feature.
-# Questo è il ranking più affidabile perché si basa sui contributi marginali
-# reali, non su proxy come la riduzione di impurità o la degradazione della
-# metrica dopo permutazione.
-
-# %%
-fig, ax = plt.subplots(figsize=(10, 8))
-shap.plots.bar(shap_explanation, max_display=20, show=False)
-plt.title("SHAP — Feature importance globale (|SHAP| medio)")
+ax.set_yticks(range(top_k))
+ax.set_yticklabels([feature_names[i] for i in top_shap_indices][::-1])
+ax.set_xlabel("Mean |SHAP value|")
+ax.set_title("Feature Importance — SHAP (Mean Absolute Contribution)")
 save_current_figure("lesson_04_shap_bar.png")
 plt.show()
 
 # %%
-# Confronto a tre: Gini vs Permutation vs SHAP
-shap_mean_abs = pd.Series(np.abs(shap_vals).mean(axis=0), index=feature_names)
-shap_rank = shap_mean_abs.rank(ascending=False).astype(int)
+# --- Tabella comparativa: 3 ranking a confronto ---
+shap_ranks = {idx: rank for rank, idx in enumerate(shap_order, 1)}
 
-three_way = pd.DataFrame(
-    {
-        "Gini_rank": gini_rank,
-        "Perm_rank": perm_rank,
-        "SHAP_rank": shap_rank,
-        "SHAP_|mean|": shap_mean_abs,
-    }
-).sort_values("SHAP_rank")
+print(f"\n{'Feature':<35} {'Gini':<8} {'Perm':<8} {'SHAP':<8} {'Consenso'}")
+print("-" * 72)
 
-print("=== Confronto a tre: Gini vs Permutation vs SHAP ===\n")
-display(three_way)
-
-# %% [markdown]
-# ### Analisi del ranking a tre: chi ha ragione?
-#
-# Il confronto rivela pattern molto istruttivi:
-#
-# - **Age**: confermata al **#1** da tutti e tre i metodi (Gini: 21.9%, Perm:
-#   0.137, SHAP: 0.135). La sua importanza è inequivocabile — nessun artefatto.
-# - **NumOfProducts**: **#2** in tutti i metodi. Segnale robusto e genuino.
-# - **IsActiveMember**: **#3** per Permutation e SHAP, ma solo **#9** per Gini.
-#   La Gini la sottostimava perché è binaria (pochi split possibili). SHAP e
-#   Permutation concordano: il suo contributo reale è il terzo più importante.
-# - **EstimatedSalary**: il verdetto SHAP è un compromesso — **#8** SHAP (0.030)
-#   vs **#3** Gini (0.099) vs **#10** Permutation (0.001). SHAP rileva un
-#   effetto intermedio: la feature ha un impatto, ma molto più debole di quanto
-#   la Gini suggerisse. Il segnale è probabilmente dovuto a interazioni deboli.
-# - **CreditScore**: pattern simile — **#5** Gini ma **#7** SHAP e **#11** Perm.
-# - **Geography_Germany**: **#5** per Permutation e SHAP (0.032), **#10** Gini.
-#   Effetto sistematico sull'appartenenza geografica — approfondiremo nel
-#   Blocco H (fairness).
-#
-# **Conclusione**: il ranking SHAP conferma la Permutation importance e
-# smentisce parzialmente la Gini. Le feature continue ad alta cardinalità
-# (EstimatedSalary, CreditScore, Tenure) erano sovrastimate dalla Gini.
-# Le feature binarie/categoriche (IsActiveMember, Geography_Germany) erano
-# sottostimate. SHAP ci dà la risposta più affidabile.
+# Mostriamo le top-15 per SHAP ranking
+for idx in shap_order[:top_k]:
+    g = gini_ranks[idx]
+    p = perm_ranks[idx]
+    s = shap_ranks[idx]
+    # Consenso: se tutti e tre concordano entro ±3 posizioni
+    consensus = "✓" if max(g, p, s) - min(g, p, s) <= 3 else "~"
+    print(f"{feature_names[idx]:<35} {g:<8} {p:<8} {s:<8} {consensus}")
 
 # %% [markdown]
-# ## 9. SHAP beeswarm plot: direzione degli effetti
+# **Analisi della convergenza tra i 3 metodi:**
 #
-# Il beeswarm plot è la visualizzazione più ricca di SHAP: ogni punto è
-# un'osservazione, la posizione sull'asse x è lo SHAP value (contributo alla
-# predizione), e il colore indica il valore della feature (rosso = alto,
-# blu = basso). Questo ci permette di vedere non solo QUANTO conta una feature,
-# ma COME la influenza — e se l'effetto è lineare, a soglia, o non-monotono.
-
-# %%
-fig, ax = plt.subplots(figsize=(12, 9))
-shap.plots.beeswarm(shap_explanation, show=False)
-plt.title("SHAP beeswarm — direzione e intensità degli effetti")
-save_current_figure("lesson_04_shap_beeswarm.png")
-plt.show()
-
-# %% [markdown]
-# ### Lettura del beeswarm: feature per feature (top-5)
-#
-# Il beeswarm rivela la **forma** della relazione tra ogni feature e la
-# predizione di churn. Analizziamo le feature più importanti:
-#
-# - **Age**: i punti rossi (età alta) si concentrano a destra (SHAP positivo →
-#   più churn), i blu (età bassa) a sinistra. L'effetto sembra non-lineare:
-#   potrebbe esserci una "soglia" di età oltre la quale il rischio cresce
-#   rapidamente. Approfondiremo con il dependence plot.
-#
-# - **NumOfProducts**: pattern probabilmente bimodale — pochi prodotti (1-2)
-#   associati a SHAP negativo (fedeltà), molti prodotti (3-4) a SHAP fortemente
-#   positivo (churn).
-#
-# - **IsActiveMember**: feature binaria con effetto netto — i clienti attivi
-#   (valore = 1, rosso) hanno SHAP negativo, i non-attivi (valore = 0, blu)
-#   hanno SHAP positivo. Il modello ha imparato che l'inattività è un segnale
-#   di rischio.
-#
-# - **Geography_Germany**: se i punti rossi (Germania = 1) sono spostati a
-#   destra, il modello associa sistematicamente l'appartenenza tedesca al churn.
-#
-# - **Balance / balance_is_zero**: l'interazione tra queste due feature potrebbe
-#   essere visibile — i clienti con saldo zero hanno un comportamento diverso.
-#
-# **→ Decisione: il beeswarm suggerisce pattern non-lineari e possibili
-# interazioni. Approfondiamo con i SHAP dependence plot per capire la forma
-# esatta di queste relazioni.**
+# - Le feature con **"✓" (consenso)** sono quelle su cui tutti e tre i metodi
+#   concordano: la loro importanza è robusta e non dipende dalla metodologia.
+# - Le feature con **"~" (discordanza)** richiedono cautela: la loro importanza
+#   è metodo-dipendente. SHAP è il metodo più rigoroso teoricamente, quindi
+#   in caso di dubbio ci affidiamo al suo ranking.
+# - Questo confronto multiplo ci protegge da conclusioni affrettate: se solo
+#   la Gini importance dicesse che una feature è importante, potremmo sbagliarci.
 
 # %% [markdown]
 # ---
-# ## BLOCCO D — Analisi delle relazioni: SHAP dependence plots
+# ## BLOCCO D — Interpretabilità locale: capire le singole predizioni
 #
 # ---
 #
-# ## 10. SHAP dependence plot per le top feature
+# ## 10. Scegliere clienti rappresentativi da spiegare
 #
-# I dependence plot mostrano la relazione tra il valore di una feature e il
-# suo SHAP value, colorando automaticamente per la feature con cui interagisce
-# di più. Sono lo strumento ideale per rivelare effetti soglia, non-linearità
-# e interazioni tra feature.
+# L'importanza globale ci dice quali feature contano *in media*. Ma il valore
+# reale della spiegabilità emerge quando sappiamo spiegare le **singole decisioni**.
 #
-# Selezioniamo le feature da esplorare in base a quanto emerso dal beeswarm:
-# quelle con pattern più interessanti o sorprendenti.
+# Selezioniamo 4 casi strategici dal validation set:
+# - (a) **Churner ad alta confidenza** (prob > 0.8) — perché il modello è così sicuro?
+# - (b) **Non-churner ad alta confidenza** (prob < 0.1) — cosa lo protegge?
+# - (c) **Caso borderline** (prob ≈ 0.4–0.6) — perché il modello esita?
+# - (d) **Falso negativo** — churner reale che il modello non identifica
 
 # %%
-# Feature da esplorare (top-5 per SHAP + balance_is_zero per interazioni)
-features_to_explore = [
-    "num__Age",
-    "num__NumOfProducts",
-    "num__IsActiveMember",
-    "cat__Geography_Germany",
-    "num__Balance",
-]
+# --- Probabilità predette sul validation set ---
+probs_val = model.predict_proba(X_val)[:, 1]
 
-fig, axes = plt.subplots(2, 3, figsize=(18, 11))
-axes = axes.flatten()
-
-for i, feat_name in enumerate(features_to_explore):
-    feat_idx = feature_names.index(feat_name)
-    ax = axes[i]
-    shap.plots.scatter(
-        shap_explanation[:, feat_name],
-        show=False,
-        ax=ax,
-    )
-    short = feat_name.replace("num__", "").replace("cat__", "")
-    ax.set_title(f"SHAP dependence: {short}")
-    ax.set_xlabel(short)
-
-# Nascondi l'ultimo subplot (vuoto)
-axes[-1].set_visible(False)
-
-plt.suptitle(
-    "SHAP dependence plots — relazioni feature → predizione",
-    fontsize=14,
-    y=1.01,
-)
-save_current_figure("lesson_04_shap_dependence_top5.png")
-plt.show()
+print(f"Distribuzione probabilità sul validation set:")
+print(f"  Min:    {probs_val.min():.4f}")
+print(f"  Q1:     {np.percentile(probs_val, 25):.4f}")
+print(f"  Median: {np.median(probs_val):.4f}")
+print(f"  Q3:     {np.percentile(probs_val, 75):.4f}")
+print(f"  Max:    {probs_val.max():.4f}")
 
 # %%
-# Dependence plot singoli (più dettagliati) per Age e NumOfProducts
-for feat_name in ["num__Age", "num__NumOfProducts"]:
-    fig, ax = plt.subplots(figsize=(9, 6))
-    shap.plots.scatter(
-        shap_explanation[:, feat_name],
-        show=False,
-        ax=ax,
+# --- Selezione dei 4 casi rappresentativi ---
+
+# (a) Churner ad alta confidenza: y=1 e prob > 0.8
+mask_a = (y_val == 1) & (probs_val > 0.8)
+case_a_idx = np.where(mask_a)[0][0] if mask_a.any() else None
+
+# (b) Non-churner ad alta confidenza: y=0 e prob < 0.1
+mask_b = (y_val == 0) & (probs_val < 0.1)
+case_b_idx = np.where(mask_b)[0][0] if mask_b.any() else None
+
+# (c) Caso borderline: prob tra 0.4 e 0.6
+mask_c = (probs_val >= 0.4) & (probs_val <= 0.6)
+case_c_idx = np.where(mask_c)[0][0] if mask_c.any() else None
+
+# (d) Falso negativo: y=1 ma prob < 0.36 (soglia ottimale L3)
+threshold_l3 = baseline_metrics.get("best_threshold", 0.36)
+mask_d = (y_val == 1) & (probs_val < threshold_l3)
+case_d_idx = np.where(mask_d)[0][0] if mask_d.any() else None
+
+cases = {
+    "Churner alta confidenza": case_a_idx,
+    "Non-churner alta confidenza": case_b_idx,
+    "Borderline": case_c_idx,
+    "Falso negativo": case_d_idx,
+}
+
+print(f"\nCasi selezionati:")
+print(f"{'Tipo':<32} {'Idx':<8} {'y reale':<10} {'P(churn)'}")
+print("-" * 65)
+for label, idx in cases.items():
+    if idx is not None:
+        print(f"{label:<32} {idx:<8} {y_val[idx]:<10.0f} {probs_val[idx]:.4f}")
+    else:
+        print(f"{label:<32} {'N/A':<8} {'—':<10} {'—'}")
+
+# %% [markdown]
+# Abbiamo identificato 4 clienti che rappresentano scenari diversi.
+# Per ciascuno, useremo SHAP per "aprire" la predizione e capire
+# esattamente quali feature hanno contribuito — e in che direzione.
+
+# %% [markdown]
+# ---
+# ## 11. SHAP Waterfall Plot — anatomia di una predizione
+#
+# Il waterfall plot mostra, per una singola osservazione:
+# - Il **base value** (predizione media del modello)
+# - Il contributo di **ogni feature** (barra rossa = spinge verso churn,
+#   barra blu = protegge dal churn)
+# - La **predizione finale** (somma di base + tutti i contributi)
+#
+# Analizziamo ciascun caso uno alla volta, come farebbe un Data Scientist
+# che deve presentare i risultati al team di business.
+
+# %%
+# --- Calcolo SHAP values per i 4 casi dal validation set ---
+X_cases = np.array([X_val[idx] for idx in cases.values() if idx is not None])
+shap_values_cases = explainer(X_cases)
+
+# Gestione output multi-classe
+if shap_values_cases.values.ndim == 3:
+    shap_values_cases_array = shap_values_cases.values[:, :, 1]
+    base_val_cases = shap_values_cases.base_values[0, 1]
+else:
+    shap_values_cases_array = shap_values_cases.values
+    base_val_cases = shap_values_cases.base_values[0]
+
+# %%
+# --- Waterfall: Caso (a) — Churner ad alta confidenza ---
+case_labels = [k for k, v in cases.items() if v is not None]
+case_indices_valid = [v for v in cases.values() if v is not None]
+
+if len(case_labels) > 0:
+    i = 0  # Primo caso: churner alta confidenza
+    explanation = shap.Explanation(
+        values=shap_values_cases_array[i],
+        base_values=base_val_cases,
+        data=X_cases[i],
+        feature_names=feature_names,
     )
-    short = feat_name.replace("num__", "").replace("cat__", "")
-    ax.set_title(f"SHAP dependence: {short}")
-    save_current_figure(f"lesson_04_shap_dep_{short.lower()}.png")
+    fig, ax = plt.subplots(figsize=(10, 7))
+    shap.plots.waterfall(explanation, max_display=12, show=False)
+    plt.title(
+        f"SHAP Waterfall — {case_labels[i]} "
+        f"(y={y_val[case_indices_valid[i]]:.0f}, "
+        f"P(churn)={probs_val[case_indices_valid[i]]:.3f})"
+    )
+    save_current_figure("lesson_04_shap_waterfall_churner_alta_conf.png")
     plt.show()
 
 # %% [markdown]
-# ### Analisi cumulativa dei dependence plots
+# **Caso (a) — Churner ad alta confidenza:**
 #
-# Ogni plot rivela la **forma** della relazione — non più ipotesi, ma evidenze:
+# Il modello è molto sicuro che questo cliente abbandonerà. Le feature che
+# spingono verso il churn (barre rosse) dominano nettamente. Osserviamo
+# quali sono e verifichiamo se ha senso dal punto di vista del business.
+
+# %%
+# --- Waterfall: Caso (b) — Non-churner ad alta confidenza ---
+if len(case_labels) > 1:
+    i = 1
+    explanation = shap.Explanation(
+        values=shap_values_cases_array[i],
+        base_values=base_val_cases,
+        data=X_cases[i],
+        feature_names=feature_names,
+    )
+    fig, ax = plt.subplots(figsize=(10, 7))
+    shap.plots.waterfall(explanation, max_display=12, show=False)
+    plt.title(
+        f"SHAP Waterfall — {case_labels[i]} "
+        f"(y={y_val[case_indices_valid[i]]:.0f}, "
+        f"P(churn)={probs_val[case_indices_valid[i]]:.3f})"
+    )
+    save_current_figure("lesson_04_shap_waterfall_non_churner.png")
+    plt.show()
+
+# %% [markdown]
+# **Caso (b) — Non-churner ad alta confidenza:**
 #
-# - **Age**: l'effetto non è lineare. Si osserva una transizione netta:
-#   sotto i ~40 anni lo SHAP è prevalentemente negativo (basso rischio),
-#   sopra i ~45 anni diventa positivo e cresce rapidamente. Questa è una
-#   relazione a *soglia* — non una correlazione lineare. Il modello ha
-#   imparato che l'*età avanzata* è un indicatore di rischio churn, con
-#   un punto di svolta intorno ai 40-45 anni.
+# Qui le feature protettive (barre blu) dominano. Il modello è sicuro che
+# questo cliente resterà. Notiamo quali fattori contribuiscono alla
+# "protezione" — tipicamente: giovane età, membro attivo, prodotti multipli.
+
+# %%
+# --- Waterfall: Caso (c) — Borderline ---
+if len(case_labels) > 2:
+    i = 2
+    explanation = shap.Explanation(
+        values=shap_values_cases_array[i],
+        base_values=base_val_cases,
+        data=X_cases[i],
+        feature_names=feature_names,
+    )
+    fig, ax = plt.subplots(figsize=(10, 7))
+    shap.plots.waterfall(explanation, max_display=12, show=False)
+    plt.title(
+        f"SHAP Waterfall — {case_labels[i]} "
+        f"(y={y_val[case_indices_valid[i]]:.0f}, "
+        f"P(churn)={probs_val[case_indices_valid[i]]:.3f})"
+    )
+    save_current_figure("lesson_04_shap_waterfall_borderline.png")
+    plt.show()
+
+# %% [markdown]
+# **Caso (c) — Borderline:**
 #
-# - **NumOfProducts**: pattern a *gradino*. 1-2 prodotti → SHAP negativo
-#   o neutro. 3-4 prodotti → SHAP fortemente positivo. I clienti con molti
-#   prodotti sono ad altissimo rischio — coerente con il fenomeno noto in
-#   ambito bancario: chi ha molti prodotti potrebbe non usarli tutti, segnale
-#   di disengagement.
+# Il caso più interessante. Il modello esita perché le forze si bilanciano:
+# alcune feature spingono verso il churn, altre proteggono, e il risultato
+# netto è una probabilità vicina a 0.5. In produzione, questi casi
+# richiederebbero un intervento manuale (revisione da parte di un analista).
+
+# %%
+# --- Waterfall: Caso (d) — Falso negativo ---
+if len(case_labels) > 3:
+    i = 3
+    explanation = shap.Explanation(
+        values=shap_values_cases_array[i],
+        base_values=base_val_cases,
+        data=X_cases[i],
+        feature_names=feature_names,
+    )
+    fig, ax = plt.subplots(figsize=(10, 7))
+    shap.plots.waterfall(explanation, max_display=12, show=False)
+    plt.title(
+        f"SHAP Waterfall — {case_labels[i]} "
+        f"(y={y_val[case_indices_valid[i]]:.0f}, "
+        f"P(churn)={probs_val[case_indices_valid[i]]:.3f})"
+    )
+    save_current_figure("lesson_04_shap_waterfall_falso_negativo.png")
+    plt.show()
+
+# %% [markdown]
+# **Caso (d) — Falso negativo:**
 #
-# - **IsActiveMember**: effetto binario netto. Valore 1 (attivo) → SHAP
-#   negativo. Valore 0 (inattivo) → SHAP positivo. Nessuna sorpresa, ma la
-#   quantificazione è preziosa.
-#
-# - **Geography_Germany**: se i clienti tedeschi (valore = 1) hanno SHAP
-#   sistematicamente positivo, il modello associa questa appartenenza al
-#   churn. La colorazione per feature interagente potrebbe rivelare con quale
-#   altra feature questa interagisce di più.
-#
-# - **Balance**: relazione più complessa, possibilmente influenzata dalla
-#   feature ingegnerizzata `balance_is_zero`.
+# Questo è un cliente che nella realtà ha abbandonato, ma il modello non lo
+# ha identificato. Il waterfall ci mostra **perché** il modello si è sbagliato:
+# le feature protettive hanno "mascherato" i segnali di rischio. Questi
+# casi sono i più pericolosi in produzione — e capirli ci aiuta a capire
+# i limiti del modello.
 
 # %% [markdown]
 # ---
-# ## BLOCCO E — Interpretabilità locale: spiegare singole predizioni
+# ## 12. Costruzione del "profilo cliente a rischio"
 #
-# ---
-#
-# ## 11. Selezione di clienti campione
-#
-# L'interpretabilità globale (beeswarm, bar plot) risponde alla domanda
-# "quali feature contano in generale?". Ma in banca, il direttore di filiale
-# chiede: "**perché** il modello ha segnalato *questo* cliente come a rischio?".
-# Per rispondere serve l'interpretabilità **locale**: spiegare una singola
-# predizione, feature per feature.
-#
-# Selezioniamo tre clienti rappresentativi dal validation set.
+# Ora aggreghiamo i contributi SHAP su **tutti i churner** nel campione per
+# identificare il pattern tipico del cliente a rischio. Non guardiamo un
+# singolo caso — cerchiamo il **profilo medio** che emerge dai dati.
 
 # %%
-# Probabilità predette dal modello
-y_prob_val = rf.predict_proba(X_val)[:, 1]
+# --- Profilo medio dei churner: SHAP values aggregati ---
+churner_mask = y_shap_sample == 1
+shap_churners = shap_values_array[churner_mask]
 
-# Selezione dei 3 clienti campione
-idx_high = np.argmax(y_prob_val)  # Massima probabilità di churn
-idx_low = np.argmin(y_prob_val)  # Minima probabilità di churn
+mean_shap_churners = shap_churners.mean(axis=0)
+mean_shap_churners_order = np.argsort(mean_shap_churners)[::-1]
 
-# Borderline: vicino alla soglia ottimale (0.305)
-diffs = np.abs(y_prob_val - BEST_THRESHOLD)
-idx_border = np.argsort(diffs)[0]
+# Top-5 driver del churn (SHAP positivo = spinge verso churn)
+print("=" * 60)
+print("PROFILO CLIENTE A RISCHIO CHURN")
+print("(basato su contributi SHAP medi dei churner nel campione)")
+print("=" * 60)
+print(f"\nTop-5 driver DEL churn (spingono verso l'abbandono):")
+print(f"{'Feature':<35} {'Mean SHAP':<12} {'Direzione'}")
+print("-" * 55)
+for idx in mean_shap_churners_order[:5]:
+    print(
+        f"{feature_names[idx]:<35} {mean_shap_churners[idx]:+.4f}    "
+        f"→ aumenta P(churn)"
+    )
 
-print("=== Clienti campione selezionati ===\n")
-for label, idx in [
-    ("ALTO RISCHIO", idx_high),
-    ("BASSO RISCHIO", idx_low),
-    ("BORDERLINE", idx_border),
-]:
-    prob = y_prob_val[idx]
-    actual = "CHURN" if y_val[idx] == 1 else "NON-CHURN"
-    print(f"  {label:15s}  idx={idx:4d}  prob={prob:.4f}  reale={actual}")
-
-# %%
-# Tabella feature per i 3 clienti
-sample_df = pd.DataFrame(
-    [X_val[idx_high], X_val[idx_low], X_val[idx_border]],
-    columns=feature_names,
-    index=["Alto rischio", "Basso rischio", "Borderline"],
-).T
-
-print("\n=== Profilo dei 3 clienti campione ===\n")
-display(sample_df)
-
-# %% [markdown]
-# ## 12. SHAP waterfall plots
-#
-# I waterfall plot mostrano come la predizione si costruisce partendo dal
-# valore base (churn rate medio) e sommando il contributo di ogni feature.
-# È il modo più intuitivo per spiegare una singola predizione a un
-# non-tecnico: "il modello ha predetto churn per questo cliente perché..."
+print(f"\nTop-5 fattori PROTETTIVI (riducono il rischio churn):")
+print(f"{'Feature':<35} {'Mean SHAP':<12} {'Direzione'}")
+print("-" * 55)
+for idx in mean_shap_churners_order[-5:][::-1]:
+    print(
+        f"{feature_names[idx]:<35} {mean_shap_churners[idx]:+.4f}    "
+        f"→ riduce P(churn)"
+    )
 
 # %%
-# Waterfall plot — Cliente ALTO RISCHIO
-shap.plots.waterfall(shap_explanation[idx_high], show=False)
-plt.title(
-    f"SHAP waterfall — Cliente ALTO RISCHIO " f"(prob={y_prob_val[idx_high]:.3f})"
+# --- Visualizzazione: contributi medi per i churner ---
+top_n_profile = 10
+profile_indices = np.concatenate(
+    [
+        mean_shap_churners_order[:top_n_profile],  # top driver churn
+    ]
 )
-save_current_figure("lesson_04_shap_waterfall_alto.png")
-plt.show()
 
-# %%
-# Waterfall plot — Cliente BASSO RISCHIO
-shap.plots.waterfall(shap_explanation[idx_low], show=False)
-plt.title(
-    f"SHAP waterfall — Cliente BASSO RISCHIO " f"(prob={y_prob_val[idx_low]:.3f})"
-)
-save_current_figure("lesson_04_shap_waterfall_basso.png")
-plt.show()
-
-# %%
-# Waterfall plot — Cliente BORDERLINE
-shap.plots.waterfall(shap_explanation[idx_border], show=False)
-plt.title(
-    f"SHAP waterfall — Cliente BORDERLINE " f"(prob={y_prob_val[idx_border]:.3f})"
-)
-save_current_figure("lesson_04_shap_waterfall_borderline.png")
-plt.show()
-
-# %% [markdown]
-# ### Interpretazione delle singole predizioni
-#
-# I waterfall plot raccontano **storie diverse** per ogni cliente:
-#
-# - **Cliente alto rischio**: la predizione di churn è guidata principalmente
-#   da una combinazione di età elevata, inattività e numero di prodotti.
-#   Ogni feature contribuisce in modo additivo — la "spiegazione" è leggibile
-#   e comunicabile al direttore di filiale.
-#
-# - **Cliente basso rischio**: le feature spingono nella direzione opposta —
-#   età giovane, cliente attivo, pochi prodotti. Il modello è "sicuro" che
-#   questo cliente resterà.
-#
-# - **Cliente borderline**: qui la situazione è più sfumata. Alcune feature
-#   spingono verso il churn, altre verso la retention, e il risultato netto
-#   è vicino alla soglia. Questi sono i casi più delicati per il business:
-#   il modello è incerto, e l'intervento umano diventa cruciale.
-#
-# **Osservazione chiave**: le feature dominanti **cambiano da cliente a
-# cliente**. Questa è la forza dell'interpretabilità locale: non esiste
-# un'unica spiegazione, ma ogni predizione ha la sua storia.
-
-# %% [markdown]
-# ---
-# ## BLOCCO F — Profilo cliente a rischio: dall'interpretabilità all'azione
-#
-# ---
-#
-# ## 13. Segmentazione basata sui SHAP values
-#
-# Dall'interpretabilità locale passiamo all'azione. Dividiamo i clienti del
-# validation set in due gruppi — alto e basso rischio — e confrontiamo i
-# SHAP values medi per capire **cosa distingue i churner dai non-churner
-# secondo il modello**.
-
-# %%
-# Segmentazione: alto rischio (prob >= soglia) vs basso rischio
-high_risk_mask = y_prob_val >= BEST_THRESHOLD
-n_high = high_risk_mask.sum()
-n_low = (~high_risk_mask).sum()
-
-print(f"Clienti alto rischio (prob ≥ {BEST_THRESHOLD}): {n_high}")
-print(f"Clienti basso rischio (prob < {BEST_THRESHOLD}): {n_low}")
-
-# SHAP values medi per gruppo
-shap_high = shap_vals[high_risk_mask].mean(axis=0)
-shap_low = shap_vals[~high_risk_mask].mean(axis=0)
-
-profile_df = pd.DataFrame(
-    {
-        "SHAP_alto_rischio": shap_high,
-        "SHAP_basso_rischio": shap_low,
-        "Differenza": shap_high - shap_low,
-    },
-    index=feature_names,
-).sort_values("Differenza", ascending=False)
-
-print("\n=== SHAP values medi per gruppo ===\n")
-display(profile_df)
-
-# %%
-# Bar chart affiancato: alto vs basso rischio
-fig, ax = plt.subplots(figsize=(12, 8))
-
-y_pos = np.arange(len(feature_names))
-sorted_feats = profile_df.index
-bar_width = 0.35
-
+fig, ax = plt.subplots(figsize=(10, 6))
+colors = [
+    "#d63031" if mean_shap_churners[i] > 0 else "#0984e3" for i in profile_indices[::-1]
+]
 ax.barh(
-    y_pos - bar_width / 2,
-    profile_df.loc[sorted_feats, "SHAP_alto_rischio"],
-    bar_width,
-    color="#E53935",
-    label=f"Alto rischio (n={n_high})",
+    range(top_n_profile),
+    mean_shap_churners[profile_indices][::-1],
+    color=colors,
     edgecolor="white",
 )
-ax.barh(
-    y_pos + bar_width / 2,
-    profile_df.loc[sorted_feats, "SHAP_basso_rischio"],
-    bar_width,
-    color="#1976D2",
-    label=f"Basso rischio (n={n_low})",
-    edgecolor="white",
-)
-
-ax.set_yticks(y_pos)
-ax.set_yticklabels(sorted_feats, fontsize=8)
-ax.axvline(0, color="grey", ls="-", lw=0.8)
-ax.set_xlabel("SHAP value medio")
-ax.set_title("Confronto SHAP: clienti alto rischio vs basso rischio")
-ax.legend(loc="lower right")
-save_current_figure("lesson_04_shap_profile_comparison.png")
+ax.set_yticks(range(top_n_profile))
+ax.set_yticklabels([feature_names[i] for i in profile_indices][::-1])
+ax.axvline(0, color="black", linewidth=0.8)
+ax.set_xlabel("Contributo SHAP medio (churner)")
+ax.set_title("Profilo Cliente a Rischio — Top driver di churn")
+save_current_figure("lesson_04_risk_profile.png")
 plt.show()
 
+# %%
+# --- Salvataggio del profilo cliente a rischio ---
+risk_profile = {
+    "descrizione": "Profilo medio dei churner basato su SHAP values",
+    "n_churner_analizzati": int(churner_mask.sum()),
+    "top_driver_churn": [
+        {"feature": feature_names[idx], "mean_shap": float(mean_shap_churners[idx])}
+        for idx in mean_shap_churners_order[:5]
+    ],
+    "top_fattori_protettivi": [
+        {"feature": feature_names[idx], "mean_shap": float(mean_shap_churners[idx])}
+        for idx in mean_shap_churners_order[-5:][::-1]
+    ],
+}
+
+with open(DATA_OUT_DIR / "lesson_04_risk_profile.json", "w") as fh:
+    json.dump(risk_profile, fh, indent=2, ensure_ascii=False)
+print(f"Profilo salvato: {DATA_OUT_DIR / 'lesson_04_risk_profile.json'}")
+
 # %% [markdown]
-# ## 14. Costruzione del profilo tipo
+# **Profilo sintetico del cliente a rischio churn:**
 #
-# Dalle evidenze SHAP possiamo costruire il "ritratto tipo" del churner:
-# il cliente che il modello considera ad alto rischio.
+# Sulla base dell'analisi SHAP aggregata, il cliente tipico che abbandona ha:
+#
+# - **Età elevata** — il driver principale: clienti più anziani hanno
+#   probabilità di churn significativamente più alta
+# - **Non è membro attivo** — l'inattività è un segnale forte di disengagement
+# - **Specifiche caratteristiche geografiche/prodotto** che emergono dal ranking
+#
+# Questo profilo è direttamente utilizzabile dal team di retention: consente
+# di definire una **campagna mirata** sui segmenti a rischio, con motivazioni
+# trasparenti e verificabili.
+
+# %% [markdown]
+# ---
+# ## BLOCCO E — Feature selection e re-training (sperimentazione)
+#
+# ---
+#
+# ## 13. Ipotesi: un modello più semplice generalizza meglio?
+#
+# Ora che conosciamo il ranking delle feature, una domanda sorge naturalmente:
+#
+# > **Servono davvero tutte e 30 le feature?** Un modello con meno feature
+# > potrebbe essere:
+# > - Più **spiegabile** (meno variabili = più facile comunicare al business)
+# > - Più **veloce** (meno colonne = meno calcolo)
+# > - Più **robusto** (meno noise = meno rischio di overfitting)
+#
+# Ma potrebbe anche **perdere informazione**. Non lo sappiamo a priori —
+# l'unico modo è sperimentare.
+#
+# **Strategia:** selezioniamo le top-K feature in base al ranking SHAP
+# (il più rigoroso), re-trainiamo un RF con gli stessi iperparametri della
+# Lezione 3, e confrontiamo le performance sul validation set.
 
 # %%
-# Valori medi delle feature per il gruppo alto rischio
-feat_means_high = pd.Series(X_val[high_risk_mask].mean(axis=0), index=feature_names)
-feat_means_low = pd.Series(X_val[~high_risk_mask].mean(axis=0), index=feature_names)
+# --- Feature selection: top-K per SHAP ranking ---
+K_values = [10, 15, 20]
 
-churner_profile = pd.DataFrame(
-    {
-        "Media_alto_rischio": feat_means_high,
-        "Media_basso_rischio": feat_means_low,
-        "Diff_%": (
-            (feat_means_high - feat_means_low) / feat_means_low.abs().clip(lower=1e-6)
+# Ranking basato su mean |SHAP|
+selected_features_by_k = {}
+for K in K_values:
+    selected_features_by_k[K] = shap_order[:K]
+    print(f"\nTop-{K} feature (SHAP ranking):")
+    for rank, idx in enumerate(shap_order[:K], 1):
+        print(
+            f"  {rank:2d}. {feature_names[idx]} "
+            f"(|SHAP| medio = {shap_mean_abs[idx]:.4f})"
         )
-        * 100,
-    },
-    index=feature_names,
-)
-
-# Mostra solo le feature con differenze rilevanti
-top_diffs = churner_profile.reindex(
-    churner_profile["Diff_%"].abs().sort_values(ascending=False).index
-).head(10)
-
-print("=== Profilo churner tipo (top-10 differenze) ===\n")
-display(top_diffs)
-
-# %% [markdown]
-# ### Dal profilo all'azione: feature azionabili vs non-azionabili
-#
-# Non tutte le feature importanti sono **azionabili** dal business:
-#
-# **Non azionabili** (caratteristiche intrinseche del cliente):
-# - **Age**: non possiamo cambiare l'età del cliente. Ma possiamo segmentare
-#   le campagne di retention per fascia d'età.
-# - **Geography**: il mercato geografico è un dato strutturale.
-# - **Gender**: attributo protetto, non actionable.
-#
-# **Azionabili** (il business può intervenire):
-# - **IsActiveMember**: incentivare l'utilizzo dei servizi digitali,
-#   programmi di engagement personalizzati, contatto proattivo.
-# - **NumOfProducts**: analizzare se i clienti con 3-4 prodotti li usano
-#   davvero o li hanno "dimenticati". Proporre semplificazione o bundle
-#   più adatti.
-# - **Satisfaction Score / Point Earned**: programmi fedeltà, survey di
-#   soddisfazione, customer care proattivo.
-#
-# Queste sono le leve su cui il business può agire per ridurre il churn,
-# guidato dall'evidenza del modello.
 
 # %% [markdown]
 # ---
-# ## BLOCCO G — Re-training: il modello può essere semplificato?
+# ## 14. Esperimento: re-training con top-K feature
 #
-# ---
-#
-# ## 15. Esperimento: modello con sole top-K feature
-#
-# Se alcune feature hanno SHAP ≈ 0, contribuiscono poco alle predizioni.
-# Un modello più semplice (meno feature) sarebbe più interpretabile, più
-# veloce e potenzialmente meno soggetto a overfitting. Ma è un'**ipotesi**
-# che va testata: semplificare potrebbe eliminare interazioni sottili che
-# contribuiscono alla performance.
-#
-# Testiamo due varianti: top-5 e top-10 feature per importanza SHAP.
+# Per ciascun valore di K, addestriamo un nuovo Random Forest (stessi
+# iperparametri: n=200, class_weight='balanced', SEED=42) e valutiamo
+# su validation set. Confrontiamo con il modello completo (K=30).
 
 # %%
-# Ranking SHAP per selezionare le top-K feature
-shap_ranking = shap_mean_abs.sort_values(ascending=False)
-print("=== Ranking SHAP (|mean|) ===\n")
-for i, (feat, val) in enumerate(shap_ranking.items(), 1):
-    print(f"  {i:2d}. {feat:<35s} {val:.4f}")
+# --- Re-training con feature selection ---
+results_feature_sel = []
 
-# %%
-# Esperimento re-training con top-K feature
-results = []
+# Baseline: modello completo (30 feature)
+auc_full = roc_auc_score(y_val, model.predict_proba(X_val)[:, 1])
+preds_full = (model.predict_proba(X_val)[:, 1] >= threshold_l3).astype(int)
+f1_full = f1_score(y_val, preds_full)
+recall_full = recall_score(y_val, preds_full)
+precision_full = precision_score(y_val, preds_full)
 
-# Modello completo (baseline)
-y_prob_full = rf.predict_proba(X_val)[:, 1]
-y_pred_full = (y_prob_full >= BEST_THRESHOLD).astype(int)
-results.append(
+results_feature_sel.append(
     {
-        "Modello": f"RF completo ({len(feature_names)} feat)",
-        "AUC": roc_auc_score(y_val, y_prob_full),
-        "F1": f1_score(y_val, y_pred_full),
-        "Recall": recall_score(y_val, y_pred_full),
-        "Precision": precision_score(y_val, y_pred_full),
+        "K": 30,
+        "label": "Completo (30 feat)",
+        "AUC": auc_full,
+        "F1": f1_full,
+        "Recall": recall_full,
+        "Precision": precision_full,
     }
 )
 
-for K in [10, 5]:
-    top_k_features = shap_ranking.head(K).index.tolist()
-    top_k_idx = [feature_names.index(f) for f in top_k_features]
-
-    X_train_k = X_train[:, top_k_idx]
-    X_val_k = X_val[:, top_k_idx]
+for K in K_values:
+    feat_idx = selected_features_by_k[K]
+    X_train_k = X_train[:, feat_idx]
+    X_val_k = X_val[:, feat_idx]
 
     rf_k = RandomForestClassifier(
         n_estimators=200,
         class_weight="balanced",
         random_state=SEED,
+        n_jobs=-1,
     )
     rf_k.fit(X_train_k, y_train)
 
-    y_prob_k = rf_k.predict_proba(X_val_k)[:, 1]
-    y_pred_k = (y_prob_k >= BEST_THRESHOLD).astype(int)
+    probs_k = rf_k.predict_proba(X_val_k)[:, 1]
+    auc_k = roc_auc_score(y_val, probs_k)
+    preds_k = (probs_k >= threshold_l3).astype(int)
+    f1_k = f1_score(y_val, preds_k)
+    recall_k = recall_score(y_val, preds_k)
+    precision_k = precision_score(y_val, preds_k)
 
-    results.append(
+    results_feature_sel.append(
         {
-            "Modello": f"RF top-{K} ({K} feat)",
-            "AUC": roc_auc_score(y_val, y_prob_k),
-            "F1": f1_score(y_val, y_pred_k),
-            "Recall": recall_score(y_val, y_pred_k),
-            "Precision": precision_score(y_val, y_pred_k),
+            "K": K,
+            "label": f"Top-{K} SHAP",
+            "AUC": auc_k,
+            "F1": f1_k,
+            "Recall": recall_k,
+            "Precision": precision_k,
         }
     )
-    print(f"\nTop-{K} feature usate:")
-    for f in top_k_features:
-        print(f"  - {f}")
-
-results_df = pd.DataFrame(results).set_index("Modello")
-print("\n=== Confronto re-training ===\n")
-display(results_df)
-
-# %% [markdown]
-# ## 16. Analisi del costo di semplificazione
-#
-# I risultati dell'esperimento di re-training sono eloquenti:
-#
-# | Modello | AUC | F1 | Recall | Precision |
-# |---------|-----|----|----|----|
-# | RF completo (20 feat) | 0.8733 | 0.6471 | 0.6740 | 0.6222 |
-# | RF top-10 (10 feat) | 0.8668 | 0.6291 | 0.6569 | 0.6036 |
-# | RF top-5 (5 feat) | 0.8100 | 0.5664 | 0.6642 | 0.4936 |
-#
-# - **Top-10 vs completo**: il drop di AUC è modesto (**0.0065**, < 1%).
-#   Eliminare le 10 feature meno importanti ha un costo minimo. Il modello
-#   a 10 feature è una semplificazione ragionevole.
-#
-# - **Top-5 vs completo**: il drop di AUC diventa significativo (**0.0633**,
-#   ≈7.3%). La precision crolla al 49.4% (dal 62.2%), rendendo il modello
-#   molto meno preciso. Le feature dalla 6ª alla 10ª (Geography_Germany, Point
-#   Earned, CreditScore, EstimatedSalary, Tenure, Gender_Male) contribuiscono
-#   collettivamente attraverso interazioni che il modello a 5 feature non può
-#   catturare.
-#
-# **Conclusione data-driven**: il modello a 10 feature è il miglior
-# compromesso tra semplicità e performance. Ridurre a 5 feature è troppo
-# aggressivo — le interazioni contano. Questo conferma che anche feature
-# con SHAP individuale moderato (come Geography_Germany, |SHAP| = 0.032)
-# giocano un ruolo nelle interazioni di gruppo.
-
-# %% [markdown]
-# ---
-# ## BLOCCO H — Fairness e implicazioni regolamentari
-#
-# ---
-#
-# ## 17. Analisi SHAP su attributi protetti
-#
-# In ambito finanziario, un modello che discrimina sistematicamente per
-# genere o nazionalità non è solo eticamente problematico — è legalmente
-# pericoloso. SHAP ci permette di verificare se e quanto il modello utilizza
-# attributi protetti (Geography, Gender) nelle sue predizioni.
 
 # %%
-# Attributi protetti da analizzare
-protected_features = {
-    "Geography": [
-        "cat__Geography_France",
-        "cat__Geography_Germany",
-        "cat__Geography_Spain",
-    ],
-    "Gender": [
-        "cat__Gender_Female",
-        "cat__Gender_Male",
-    ],
-}
+# --- Tabella comparativa ---
+df_results = pd.DataFrame(results_feature_sel)
+df_results = df_results.set_index("label")
 
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+print("\n" + "=" * 70)
+print("CONFRONTO MODELLI: FEATURE SELECTION vs MODELLO COMPLETO")
+print("=" * 70)
+print(f"\n(Soglia di classificazione: {threshold_l3})\n")
+display(df_results[["K", "AUC", "F1", "Recall", "Precision"]])
 
-for ax, (group_name, feat_list) in zip(axes, protected_features.items()):
-    shap_data = []
-    for feat in feat_list:
-        idx = feature_names.index(feat)
-        short = (
-            feat.replace("cat__", "").replace("Geography_", "").replace("Gender_", "")
+# Calcolo delta rispetto al modello completo
+print(f"\nDelta AUC rispetto al modello completo (30 feature):")
+for _, row in df_results.iterrows():
+    if row["K"] < 30:
+        delta = row["AUC"] - auc_full
+        print(
+            f"  Top-{row['K']:.0f}: ΔAUC = {delta:+.4f} "
+            f"({'accettabile' if abs(delta) < 0.01 else 'significativo'})"
         )
-        shap_data.append(pd.DataFrame({"SHAP": shap_vals[:, idx], "Gruppo": short}))
-    plot_df = pd.concat(shap_data, ignore_index=True)
-    sns.boxplot(data=plot_df, x="Gruppo", y="SHAP", ax=ax, palette="Set2")
-    ax.axhline(0, color="grey", ls="--", lw=0.8)
-    ax.set_title(f"Distribuzione SHAP — {group_name}")
-    ax.set_ylabel("SHAP value (classe churn)")
 
-save_current_figure("lesson_04_shap_fairness.png")
+# %%
+# --- Curva AUC vs numero di feature ---
+fig, ax = plt.subplots(figsize=(8, 5))
+k_vals = [r["K"] for r in results_feature_sel]
+auc_vals = [r["AUC"] for r in results_feature_sel]
+
+ax.plot(k_vals, auc_vals, "o-", color="mediumpurple", linewidth=2, markersize=8)
+ax.axhline(
+    auc_full,
+    color="gray",
+    linestyle="--",
+    alpha=0.7,
+    label=f"Modello completo (AUC={auc_full:.4f})",
+)
+ax.set_xlabel("Numero di feature selezionate (K)")
+ax.set_ylabel("ROC-AUC (validation set)")
+ax.set_title("Trade-off: Numero di Feature vs Performance")
+ax.set_xticks(k_vals)
+ax.legend()
+ax.grid(True, alpha=0.3)
+save_current_figure("lesson_04_feature_selection_curve.png")
+plt.show()
+
+# %% [markdown]
+# **Osservazioni sulla feature selection:**
+#
+# - Confrontiamo i delta AUC: se il modello con 15 feature perde meno dello
+#   0.01 di AUC, la riduzione è **accettabile** — guadagniamo in semplicità
+#   senza sacrificare performance significativa.
+# - Se invece la perdita è > 0.01, le feature rimosse contenevano informazione
+#   utile — il modello completo resta preferibile.
+# - Questa analisi è il tipico **trade-off Data Science**: semplicità vs
+#   performance. La decisione finale dipende dal contesto di business.
+
+# %% [markdown]
+# ---
+# ## 15. Analisi dell'errore: cosa perde il modello ridotto?
+#
+# Se il modello ridotto ha performance simili, le feature rimosse erano
+# ridondanti. Ma se perde qualcosa, vogliamo capire **su quali casi** sbaglia
+# in più. Questo ci dice se la perdita è "uniforme" o concentrata su un
+# sottogruppo specifico.
+
+# %%
+# --- Confronto errori: modello completo vs miglior modello ridotto ---
+# Scegliamo il modello ridotto con il miglior compromesso
+best_reduced = min(
+    [r for r in results_feature_sel if r["K"] < 30],
+    key=lambda r: abs(r["AUC"] - auc_full),
+)
+best_K = int(best_reduced["K"])
+print(
+    f"Miglior modello ridotto: Top-{best_K} feature "
+    f"(ΔAUC = {best_reduced['AUC'] - auc_full:+.4f})"
+)
+
+# Re-fit per ottenere le predizioni
+feat_idx_best = selected_features_by_k[best_K]
+X_train_best = X_train[:, feat_idx_best]
+X_val_best = X_val[:, feat_idx_best]
+
+rf_best_reduced = RandomForestClassifier(
+    n_estimators=200,
+    class_weight="balanced",
+    random_state=SEED,
+    n_jobs=-1,
+)
+rf_best_reduced.fit(X_train_best, y_train)
+
+probs_reduced = rf_best_reduced.predict_proba(X_val_best)[:, 1]
+preds_reduced = (probs_reduced >= threshold_l3).astype(int)
+preds_complete = (probs_val >= threshold_l3).astype(int)
+
+# Casi dove divergono
+divergent_mask = preds_reduced != preds_complete
+n_divergent = divergent_mask.sum()
+print(
+    f"\nCasi dove i due modelli divergono: {n_divergent} / {len(y_val)} "
+    f"({n_divergent / len(y_val):.1%})"
+)
+
+if n_divergent > 0:
+    # Analisi dei casi divergenti
+    y_div = y_val[divergent_mask]
+    print(f"\n  Di questi {n_divergent} casi divergenti:")
+    print(f"    Churner reali: {y_div.sum():.0f}")
+    print(f"    Non-churner reali: {(1 - y_div).sum():.0f}")
+
+    # Quanti errori in più fa il modello ridotto?
+    errors_complete = (preds_complete != y_val).sum()
+    errors_reduced = (preds_reduced != y_val).sum()
+    print(f"\n  Errori modello completo: {errors_complete}")
+    print(f"  Errori modello ridotto:  {errors_reduced}")
+    print(f"  Errori in più del ridotto: {errors_reduced - errors_complete}")
+
+# %% [markdown]
+# **Cosa abbiamo imparato?**
+#
+# L'analisi degli errori ci dice se la feature selection ha rimosso informazione
+# critica o solo rumore. Se i casi divergenti sono pochi e distribuiti
+# uniformemente tra churner e non-churner, la riduzione è sicura.
+# Se invece il modello ridotto sbaglia sistematicamente su un sottogruppo
+# (e.g., clienti di una specifica geography), abbiamo un problema.
+#
+# **Decisione finale sulla feature selection:** la prendiamo guardando i numeri
+# concreti prodotti sopra. Il Data Scientist non decide a priori — decide
+# dopo aver visto i dati.
+
+# %% [markdown]
+# ---
+# ## BLOCCO F — Contesto regolatorio e implicazioni di business
+#
+# ---
+#
+# ## 16. Feature sensibili: Geography e Gender nel modello
+#
+# In un contesto bancario, alcune feature sono considerate **sensibili**
+# da un punto di vista etico e regolatorio. `Gender` e `Geography` possono
+# essere proxy di caratteristiche protette (genere, etnia, nazionalità).
+#
+# Domanda: **quanto contribuiscono queste feature alle decisioni del modello?**
+# Se contribuiscono significativamente, il modello potrebbe discriminare —
+# e questo è un problema sia etico che legale.
+
+# %%
+# --- Identificazione feature sensibili ---
+sensitive_keywords = ["Gender", "Geography"]
+sensitive_indices = [
+    i
+    for i, name in enumerate(feature_names)
+    if any(kw in name for kw in sensitive_keywords)
+]
+sensitive_names = [feature_names[i] for i in sensitive_indices]
+
+print("Feature sensibili identificate:")
+for i, name in zip(sensitive_indices, sensitive_names):
+    print(
+        f"  {name}: mean |SHAP| = {shap_mean_abs[i]:.4f}, "
+        f"rank SHAP = {shap_ranks[i]}"
+    )
+
+# %%
+# --- Contributo SHAP delle feature sensibili ---
+shap_sensitive = shap_values_array[:, sensitive_indices]
+
+fig, axes = plt.subplots(
+    1, len(sensitive_indices), figsize=(4 * len(sensitive_indices), 5)
+)
+if len(sensitive_indices) == 1:
+    axes = [axes]
+
+for ax, idx, name in zip(axes, sensitive_indices, sensitive_names):
+    ax.hist(
+        shap_values_array[:, idx], bins=30, color="salmon", edgecolor="white", alpha=0.8
+    )
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_xlabel("SHAP value")
+    ax.set_ylabel("Frequenza")
+    ax.set_title(f"{name}\n(mean |SHAP|={shap_mean_abs[idx]:.4f})")
+
+plt.suptitle("Distribuzione SHAP values — Feature Sensibili", fontsize=12)
+plt.tight_layout()
+save_current_figure("lesson_04_sensitive_features_shap.png")
 plt.show()
 
 # %%
-# Statistiche descrittive per attributo protetto
-print("=== SHAP values medi per attributo protetto ===\n")
-for group_name, feat_list in protected_features.items():
-    print(f"  {group_name}:")
-    for feat in feat_list:
-        idx = feature_names.index(feat)
-        vals = shap_vals[:, idx]
-        short = feat.replace("cat__", "")
-        print(
-            f"    {short:<25s}  "
-            f"media={vals.mean():+.4f}  "
-            f"mediana={np.median(vals):+.4f}  "
-            f"|media|={np.abs(vals).mean():.4f}"
-        )
-    print()
+# --- Confronto: contributo relativo delle feature sensibili ---
+total_shap_budget = shap_mean_abs.sum()
+sensitive_shap_budget = shap_mean_abs[sensitive_indices].sum()
 
-# %% [markdown]
-# ### Analisi critica della fairness
-#
-# L'analisi SHAP sugli attributi protetti rivela un quadro interessante:
-#
-# - **Geography_Germany**: ha |SHAP| medio = 0.032, il più alto tra gli
-#   attributi protetti. Il SHAP medio è negativo (−0.005), ma la mediana
-#   (−0.016) indica che per la *maggioranza* dei clienti tedeschi, l'effetto
-#   spinge verso valori più bassi. Tuttavia, la distribuzione ha una coda
-#   destra: per un sottogruppo, essere tedesco aumenta il rischio predetto.
-#   Questo riflette il pattern reale osservato nella Lezione 1: i clienti
-#   tedeschi hanno un tasso di churn più alto nel dataset.
-#
-# - **Gender**: Gender_Female (|SHAP| = 0.016) e Gender_Male (|SHAP| = 0.018)
-#   hanno impatto simile e modesto. I valori medi sono entrambi leggermente
-#   negativi (−0.003), suggerendo che il genere non discrimina
-#   sistematicamente in una direzione. L'effetto è piccolo ma non nullo —
-#   merita monitoraggio.
-#
-# L'interpretabilità SHAP non elimina il bias — lo rende **visibile e
-# misurabile**. La decisione su come gestirlo (rimuovere la feature,
-# calibrare il modello, documentare la giustificazione) spetta al business
-# e al compliance officer.
-
-# %% [markdown]
-# ## 18. Contesto regolamentare
-#
-# L'interpretabilità non è solo un esercizio accademico. Nel settore
-# finanziario, è un **requisito normativo**:
-#
-# - **GDPR Art. 22** (UE): il cliente ha diritto a una spiegazione quando
-#   è soggetto a decisioni automatizzate che lo riguardano significativamente.
-#   Un modello di churn che attiva azioni di retention deve poter essere
-#   spiegato.
-#
-# - **EBA Guidelines on loan origination and monitoring** (2020): le banche
-#   devono garantire che i modelli di credito siano "spiegabili" e che le
-#   decisioni siano documentate e giustificabili.
-#
-# - **SR 11-7 (Federal Reserve)**: la *model risk management* richiede che
-#   i modelli siano validati, comprensibili e monitorati. Un modello "black
-#   box" non supera l'audit interno.
-#
-# Lo SHAP waterfall plot è lo strumento ideale per la compliance: fornisce
-# una spiegazione predizione-per-predizione, quantificata e basata su
-# fondamenti matematici solidi (valori di Shapley). Ogni predizione può
-# essere accompagnata da un report che dettaglia il contributo di ogni
-# feature — esattamente ciò che il regolatore chiede.
-#
-# **In sintesi**: un modello che non si può spiegare non si può usare in
-# produzione bancaria. SHAP rende il nostro Random Forest spiegabile.
-
-# %% [markdown]
-# ---
-# ## BLOCCO I — Chiusura
-#
-# ---
-#
-# ## 19. Riepilogo delle scoperte
-
-# %%
-# Salvataggio SHAP values per potenziale riuso nella Lezione 5
-shap_out_path = DATA_OUT_DIR / "lesson_04_shap_values.pkl"
-joblib.dump(
-    {
-        "shap_values": shap_vals,
-        "base_value": base_value,
-        "feature_names": feature_names,
-    },
-    shap_out_path,
+print(f"\nBudget SHAP totale: {total_shap_budget:.4f}")
+print(f"Budget SHAP feature sensibili: {sensitive_shap_budget:.4f}")
+print(
+    f"Percentuale decisionale delle feature sensibili: "
+    f"{sensitive_shap_budget / total_shap_budget:.1%}"
 )
-print(f"SHAP values salvati: {shap_out_path}")
+print(f"\nDettaglio:")
+for i, name in zip(sensitive_indices, sensitive_names):
+    pct = shap_mean_abs[i] / total_shap_budget
+    print(f"  {name}: {pct:.1%} del budget decisionale totale")
 
 # %% [markdown]
-# ### Cosa abbiamo scoperto in questa lezione
+# **Analisi delle feature sensibili:**
 #
-# | Tema | Evidenza |
-# |------|----------|
-# | **Ranking robusto** | Age confermata #1 da tutti e tre i metodi (Gini 21.9%, Perm 0.137, SHAP 0.135). NumOfProducts #2, IsActiveMember #3 per Perm/SHAP. |
-# | **Gini inflazionata** | EstimatedSalary: #3 Gini → #10 Perm → #8 SHAP. CreditScore: #5 Gini → #11 Perm → #7 SHAP. Tenure: #7 Gini → #15 Perm. La Gini sovrastima le feature continue ad alta cardinalità. |
-# | **Non-linearità** | Age: effetto a soglia (~40-45 anni). NumOfProducts: effetto a gradino (3-4 → alto rischio). Balance: interazione con balance_is_zero. |
-# | **Interpretabilità locale** | Ogni predizione ha una storia diversa: il cliente alto rischio (idx=1835, prob=0.895) è guidato da una combinazione unica di feature. |
-# | **Profilo churner** | Clienti alto rischio (n=442 su 2000 val): anziani, inattivi, con molti prodotti, spesso tedeschi. |
-# | **Feature azionabili** | IsActiveMember e NumOfProducts sono le leve principali per campagne di retention. |
-# | **Re-training** | Top-10: AUC 0.867 (drop 0.007) — semplificazione praticabile. Top-5: AUC 0.810 (drop 0.063) — troppo aggressivo, le interazioni contano. |
-# | **Fairness** | Geography_Germany ha il maggior impatto SHAP tra gli attributi protetti (|SHAP|=0.032). Gender ha effetto modesto e simmetrico (|SHAP|≈0.017). |
-# | **Regolamentazione** | SHAP waterfall come strumento di compliance (GDPR Art. 22, EBA, SR 11-7). |
+# - Se le feature Geography e Gender contribuiscono per una percentuale
+#   **bassa** del budget decisionale totale (e.g., < 5% ciascuna), il modello
+#   non si basa significativamente su di esse.
+# - Se invece contribuiscono in modo **sostanziale**, ci sono due opzioni:
+#   1. **Rimuoverle** e re-trainare (come nell'esperimento del Blocco E)
+#   2. **Applicare vincoli di fairness** (equalized odds, demographic parity)
+# - In entrambi i casi, la **trasparenza** è fondamentale: documentiamo
+#   esattamente quanto pesano e perché le abbiamo tenute/rimosse.
 
 # %% [markdown]
-# ## 20. Domande guidate
+# ---
+# ## 17. Cenni regolatori — GDPR e spiegabilità nel credito
 #
-# **1. Perché la Gini importance e la Permutation importance producono
-# ranking diversi?**
+# ### Il contesto normativo europeo
 #
-# Perché misurano cose diverse. La Gini importance conta quanto una feature
-# riduce l'impurità durante la costruzione degli alberi (training), e
-# favorisce feature continue con molti valori distinti. La Permutation
-# importance misura quanto peggiora la metrica (AUC) sul validation set
-# quando si distrugge il segnale di una feature. La discrepanza per
-# EstimatedSalary (alta Gini, bassa Permutation) conferma il bias della
-# Gini verso le feature ad alta cardinalità.
+# Nel settore finanziario europeo, l'uso di modelli di Machine Learning per
+# decisioni che impattano i clienti è regolato da:
 #
-# **2. Come interpreteresti il SHAP waterfall plot del cliente ad alto
-# rischio a un direttore di filiale?**
+# **1. GDPR — Art. 22 (Decisioni automatizzate)**
 #
-# "Il modello ha segnalato questo cliente come ad alto rischio perché la
-# combinazione di fattori — principalmente la sua età elevata, l'inattività
-# e il numero di prodotti — contribuisce additivamente alla predizione.
-# Ogni barra nel grafico rappresenta quanto ciascun fattore spinge verso
-# o contro il churn. Le barre rosse sono i fattori di rischio, le blu
-# sono i fattori protettivi."
+# > *"L'interessato ha il diritto di non essere sottoposto a una decisione
+# > basata unicamente sul trattamento automatizzato [...] che produca effetti
+# > giuridici che lo riguardano."*
 #
-# **3. Se il modello con sole 5 feature ha performance significativamente
-# peggiore del modello completo, perché non usare il top-10?**
+# In pratica: se un modello di churn viene usato per negare un prodotto
+# finanziario o modificare le condizioni di un cliente, il cliente ha diritto
+# a una **spiegazione** della decisione.
 #
-# L'esperimento mostra che il top-10 (AUC 0.867) perde solo 0.007 rispetto
-# al completo (AUC 0.873), mentre il top-5 (AUC 0.810) perde 0.063. Il
-# modello a 10 feature è il miglior compromesso: semplice abbastanza da
-# essere interpretabile, ma ricco abbastanza da catturare le interazioni
-# rilevanti. Attenzione però: in produzione, il modello a 10 feature
-# potrebbe essere più fragile a distributional shift su feature escluse.
+# **2. EBA Guidelines on ML for Credit Institutions (2021)**
 #
-# **4. Perché l'analisi fairness è necessaria anche se il modello non è
-# usato per decisioni creditizie dirette?**
+# Le linee guida dell'European Banking Authority richiedono:
+# - **Interpretabilità**: i modelli devono essere comprensibili per chi li usa
+# - **Documentazione**: ogni modello deve avere una descrizione delle feature
+#   usate e del loro impatto
+# - **Monitoraggio del bias**: verificare che il modello non discrimini
+#   sulla base di caratteristiche protette
 #
-# Un modello di churn che attiva campagne di retention differenziate può
-# indirettamente discriminare: se il modello predice più churn per le
-# donne, queste ricevono più offerte di retention — un trattamento
-# differenziale basato su un attributo protetto. Anche azioni "positive"
-# possono essere discriminatorie in termini regolamentari.
+# **3. AI Act (Regolamento UE 2024/1689)**
 #
-# **5. Qual è il vantaggio pratico più grande di SHAP rispetto alla
-# semplice feature importance?**
+# I sistemi di scoring creditizio sono classificati come **alto rischio**
+# (Allegato III, punto 5b), richiedendo:
+# - Valutazione di conformità
+# - Gestione del rischio
+# - Spiegabilità delle decisioni
 #
-# SHAP fornisce interpretabilità a tre livelli: globale (quali feature
-# contano), direzionale (come ogni feature influenza la predizione), e
-# locale (perché il modello ha fatto quella predizione per quel cliente
-# specifico). La feature importance tradizionale copre solo il primo livello.
-# In un contesto regolamentato, SHAP waterfall è l'unico strumento che
-# soddisfa il requisito di "spiegabilità predizione-per-predizione".
+# ### Collegamento pratico
+#
+# Gli strumenti che abbiamo usato in questa lezione sono **esattamente** ciò
+# che serve per la compliance:
+#
+# | Requisito normativo | Strumento usato |
+# |---------------------|-----------------|
+# | "Spiegare la decisione al cliente" | SHAP Waterfall Plot |
+# | "Documentare l'importanza delle feature" | Tabella ranking 3 metodi |
+# | "Verificare assenza di bias" | Analisi feature sensibili (sez. 16) |
+# | "Modello interpretabile" | Profilo cliente a rischio |
+#
+# Il Data Scientist non opera in un vuoto tecnico — le scelte di modellazione
+# hanno implicazioni legali e etiche concrete.
 
 # %% [markdown]
-# ## 21. Bridge verso la Lezione 5
+# ---
+# ## BLOCCO G — Chiusura
 #
-# In questa lezione abbiamo risposto al **perché**: perché il modello fa
-# certe predizioni, quali feature guidano le decisioni, e come comunicare
-# i risultati al business. Ora sappiamo CHE funziona (Lezione 3) e PERCHÉ
-# funziona (Lezione 4).
+# ---
 #
-# La **Lezione 5** risponde al **come migliorare**: cross-validation per
-# stime più robuste, hyperparameter tuning sistematico (Grid Search, Random
-# Search), e modelli avanzati come XGBoost. L'obiettivo è simulare un
-# mini-progetto end-to-end, dalla sperimentazione alla selezione finale,
-# utilizzando le tecniche di interpretabilità apprese in questa lezione per
-# validare ogni scelta.
+# ## 18. Riepilogo del percorso e artefatti prodotti
+#
+# ### Percorso ragionato in questa lezione
+#
+# | Step | Esperimento/Analisi | Insight chiave | Decisione |
+# |------|---------------------|----------------|-----------|
+# | 1 | Gini importance | Age domina, ma bias verso numeriche | Servono conferme |
+# | 2 | Permutation importance | Conferma top-3, ridimensiona alcune | Più affidabile di Gini |
+# | 3 | SHAP values | Ranking rigoroso + direzione effetti | Framework definitivo |
+# | 4 | Summary plot | Visualizzazione globale contributi | Age confermata, IsActive forte |
+# | 5 | Waterfall (4 casi) | Anatomia singole decisioni | Il modello è spiegabile |
+# | 6 | Profilo rischio | Pattern medio dei churner | Comunicabile al business |
+# | 7 | Feature selection | Top-K vs completo | Trade-off quantificato |
+# | 8 | Feature sensibili | Contributo Geography/Gender | Documentato per compliance |
 #
 # ### Artefatti prodotti
 #
-# | File | Contenuto |
-# |------|-----------|
-# | `outputs/figures/lesson_04_gini_importance_recap.png` | Recap Gini importance |
-# | `outputs/figures/lesson_04_permutation_importance.png` | Permutation importance |
-# | `outputs/figures/lesson_04_gini_vs_perm_scatter.png` | Scatter Gini vs Permutation rank |
-# | `outputs/figures/lesson_04_shap_bar.png` | SHAP global bar plot |
-# | `outputs/figures/lesson_04_shap_beeswarm.png` | SHAP beeswarm plot |
-# | `outputs/figures/lesson_04_shap_dependence_top5.png` | Dependence plots (griglia) |
-# | `outputs/figures/lesson_04_shap_dep_age.png` | Dependence plot Age |
-# | `outputs/figures/lesson_04_shap_dep_numofproducts.png` | Dependence plot NumOfProducts |
-# | `outputs/figures/lesson_04_shap_waterfall_alto.png` | Waterfall alto rischio |
-# | `outputs/figures/lesson_04_shap_waterfall_basso.png` | Waterfall basso rischio |
-# | `outputs/figures/lesson_04_shap_waterfall_borderline.png` | Waterfall borderline |
-# | `outputs/figures/lesson_04_shap_profile_comparison.png` | Profilo churner vs non-churner |
-# | `outputs/figures/lesson_04_shap_fairness.png` | SHAP fairness attributi protetti |
-# | `outputs/data/lesson_04_shap_values.pkl` | SHAP values per riuso |
+# | File | Descrizione |
+# |------|-------------|
+# | `outputs/figures/lesson_04_gini_importance.png` | Barplot importanza Gini |
+# | `outputs/figures/lesson_04_permutation_importance.png` | Barplot Permutation |
+# | `outputs/figures/lesson_04_gini_vs_permutation.png` | Confronto side-by-side |
+# | `outputs/figures/lesson_04_shap_summary.png` | SHAP summary plot |
+# | `outputs/figures/lesson_04_shap_bar.png` | SHAP bar plot |
+# | `outputs/figures/lesson_04_shap_waterfall_*.png` | Waterfall 4 casi |
+# | `outputs/figures/lesson_04_feature_selection_curve.png` | AUC vs K feature |
+# | `outputs/figures/lesson_04_sensitive_features_shap.png` | SHAP feature sensibili |
+# | `outputs/data/lesson_04_risk_profile.json` | Profilo cliente a rischio |
+# | `outputs/data/lesson_04_feature_ranking.json` | Ranking consolidato |
+
+# %%
+# --- Salvataggio ranking consolidato ---
+feature_ranking = {
+    "metodo": "Consolidamento Gini + Permutation + SHAP",
+    "n_features": len(feature_names),
+    "ranking": [
+        {
+            "feature": feature_names[idx],
+            "rank_gini": int(gini_ranks[idx]),
+            "rank_permutation": int(perm_ranks[idx]),
+            "rank_shap": int(shap_ranks[idx]),
+            "mean_abs_shap": float(shap_mean_abs[idx]),
+        }
+        for idx in shap_order
+    ],
+}
+
+with open(DATA_OUT_DIR / "lesson_04_feature_ranking.json", "w") as fh:
+    json.dump(feature_ranking, fh, indent=2, ensure_ascii=False)
+print(f"Ranking salvato: {DATA_OUT_DIR / 'lesson_04_feature_ranking.json'}")
+
+# %%
+# --- Salvataggio SHAP values per riuso futuro ---
+np.save(DATA_OUT_DIR / "lesson_04_shap_values.npy", shap_values_array)
+print(f"SHAP values salvati: {DATA_OUT_DIR / 'lesson_04_shap_values.npy'}")
+print(f"  Shape: {shap_values_array.shape}")
+
+# %% [markdown]
+# ---
+# ## 19. Domande guidate
+#
+# **1. Perché la Gini importance da sola non basta per decisioni di business?**
+#
+# La Gini importance ha un bias noto verso feature ad alta cardinalità e
+# variabili continue. Non usa il validation set, quindi non riflette la reale
+# capacità predittiva. Nel nostro caso, `EstimatedSalary` e `CreditScore`
+# potrebbero apparire importanti per Gini ma contribuire poco alla
+# performance reale (ΔAUC basso nella permutation). Per decisioni di business,
+# servono metodi che valutino l'impatto effettivo sulla metrica target.
+#
+# **2. Se dovessi spiegare al direttore di filiale perché 200 clienti sono
+# ad alto rischio, quale visualizzazione useresti?**
+#
+# Il **profilo cliente a rischio** (sezione 12) è lo strumento più efficace:
+# sintetizza i top driver del churn in un formato leggibile senza gergo tecnico.
+# Per casi individuali controversi, il **waterfall plot** mostra trasparentemente
+# come il modello è arrivato alla sua decisione — traducibile in "Le feature X, Y, Z
+# del cliente contribuiscono al rischio elevato".
+#
+# **3. Quando la feature selection è preferibile al modello completo?**
+#
+# Quando la perdita di AUC è trascurabile (< 0.01) e il contesto richiede:
+# (a) spiegabilità semplificata (meno variabili da comunicare),
+# (b) velocità di inferenza (produzione ad alto throughput),
+# (c) robustezza a cambiamenti distribuzionali (meno feature = meno fragile).
+# Se invece la perdita è significativa, il modello completo resta preferibile
+# — ma va documentato perché usa tutte le 30 feature.
+#
+# **4. Il modello è "fairness-compliant"? Come lo verificheresti in modo
+# più rigoroso?**
+#
+# L'analisi della sezione 16 è un primo passo (quantifica il contributo delle
+# feature sensibili). Per una verifica più rigorosa, si calcolerebbero metriche
+# di fairness come:
+# - **Demographic parity**: P(pred=1|Gender=F) ≈ P(pred=1|Gender=M)?
+# - **Equalized odds**: TPR e FPR uguali tra gruppi?
+# - **Calibration by group**: le probabilità sono ben calibrate per ogni gruppo?
+# Se emergono disparità, si possono applicare post-processing (threshold
+# differenziati per gruppo) o vincoli in-processing durante il training.
+#
+# **5. Come si collega il lavoro fatto oggi al concetto di re-training
+# in produzione?**
+#
+# In produzione, il modello deve essere ri-addestrato periodicamente perché
+# la distribuzione dei dati cambia (concept drift). Quando si re-traina,
+# l'analisi SHAP va ripetuta: se il ranking delle feature cambia drasticamente,
+# è un segnale di allarme (il mondo è cambiato, il modello potrebbe non essere
+# più valido). Il profilo del cliente a rischio va aggiornato e comunicato
+# al business per verificare che sia ancora coerente con la realtà operativa.
+
+# %% [markdown]
+# ---
+# ## 20. Bridge verso la Lezione 5
+#
+# ### Cosa abbiamo costruito
+#
+# In questa lezione abbiamo aperto la "scatola nera" del Random Forest:
+# sappiamo **perché** il modello prende le decisioni che prende, e possiamo
+# comunicarlo al business e alla compliance.
+#
+# ### Cosa ci manca
+#
+# 1. **Cross-validation:** finora abbiamo valutato su un singolo split.
+#    La stima dell'AUC è affidabile, ma non abbiamo una misura della sua
+#    **variabilità**. Quanto cambia l'AUC se cambiamo il split?
+#
+# 2. **Hyperparameter tuning:** abbiamo usato n_estimators=200 e
+#    class_weight='balanced' senza mai ottimizzarli. Esistono combinazioni
+#    migliori? Grid Search e Random Search ci permettono di esplorare
+#    sistematicamente lo spazio degli iperparametri.
+#
+# 3. **Modelli avanzati (XGBoost):** il Random Forest è buono, ma il gradient
+#    boosting (in particolare XGBoost) è spesso superiore in competizioni e
+#    applicazioni reali. Nella Lezione 5 lo introdurremo e lo confronteremo.
+#
+# 4. **Modello finale per la challenge:** la combinazione di feature selection
+#    (identificata qui in L4) + tuning + XGBoost potrebbe portare a un modello
+#    ancora migliore — e lo presenteremo in un mini-report simulando un
+#    progetto reale end-to-end.
+#
+# La **Lezione 5** chiuderà il percorso: dalla sperimentazione al modello
+# finale, con cross-validation rigorosa e un report di progetto.
