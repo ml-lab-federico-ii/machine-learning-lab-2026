@@ -1,0 +1,3 @@
+# Ignora i file ricevuti dagli studenti — solo il docente li gestisce localmente
+*.joblib
+*.html
