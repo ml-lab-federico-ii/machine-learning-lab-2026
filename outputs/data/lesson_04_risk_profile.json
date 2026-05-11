@@ -1,0 +1,48 @@
+{
+  "descrizione": "Profilo medio dei churner basato su SHAP values",
+  "n_churner_analizzati": 203,
+  "top_driver_churn": [
+    {
+      "feature": "num__Age",
+      "mean_shap": 0.06839422837336274
+    },
+    {
+      "feature": "cat__NumOfProducts_2",
+      "mean_shap": 0.06080187038341037
+    },
+    {
+      "feature": "cat__Geography_Germany",
+      "mean_shap": 0.03039630165708715
+    },
+    {
+      "feature": "cat__NumOfProducts_1",
+      "mean_shap": 0.022114836856137663
+    },
+    {
+      "feature": "cat__IsActiveMember_1",
+      "mean_shap": 0.018673243656271477
+    }
+  ],
+  "top_fattori_protettivi": [
+    {
+      "feature": "num__CreditScore",
+      "mean_shap": -0.006536292211126248
+    },
+    {
+      "feature": "num__Point Earned",
+      "mean_shap": -0.006518526328363613
+    },
+    {
+      "feature": "num__EstimatedSalary",
+      "mean_shap": -0.006079695617110103
+    },
+    {
+      "feature": "num__Tenure",
+      "mean_shap": -0.0029254271129791408
+    },
+    {
+      "feature": "cat__Satisfaction Score_3",
+      "mean_shap": 0.0008811457420648844
+    }
+  ]
+}
