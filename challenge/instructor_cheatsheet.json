@@ -33,7 +33,7 @@
     "best_model": "RandomForest",
     "best_auc": 0.7109,
     "question_business": "I clienti più anziani nel vostro dataset mostrano un rischio churn significativamente più alto. Quale programma di retention proporreste specificamente per questo segmento?",
-    "question_technical": "Il vostro dataset ha un churn rate elevato (~28%). Come avete gestito lo sbilanciamento delle classi? Quale impatto ha avuto sulle metriche?"
+    "question_technical": "Il vostro dataset ha un churn rate molto elevato (~43%). Come avete gestito lo sbilanciamento delle classi? Quale impatto ha avuto sulle metriche?"
   },
   {
     "seed": 3,
@@ -146,7 +146,7 @@
   {
     "seed": 9,
     "profile_name": "Churn molto alto, classe bilanciata",
-    "profile_desc": "Churn rate ~35%. Quasi bilanciato. Il class_weight ha meno impatto ma la soglia di classificazione diventa critica.",
+    "profile_desc": "Churn rate ~47%. Quasi bilanciato. Il class_weight ha meno impatto ma la soglia di classificazione diventa critica.",
     "n_rows_train": 8500,
     "n_rows_test": 1500,
     "churn_rate_train": 0.47,
@@ -158,8 +158,8 @@
     },
     "best_model": "RandomForest",
     "best_auc": 0.6824,
-    "question_business": "Un terzo dei clienti nel vostro dataset abbandona. Questo scenario suggerisce un problema sistemico. Quali azioni strutturali proporreste alla banca?",
-    "question_technical": "Con un churn rate ~35%, il dataset è quasi bilanciato. Come influenza questo la scelta di class_weight e della soglia di classificazione?"
+    "question_business": "Quasi la met\u00e0 dei clienti nel vostro dataset abbandona (~47%). Questo scenario suggerisce un problema sistemico. Quali azioni strutturali proporreste alla banca?",
+    "question_technical": "Con un churn rate ~47%, il dataset \u00e8 quasi bilanciato. Come influenza questo la scelta di class_weight e della soglia di classificazione?"
   },
   {
     "seed": 10,
@@ -200,7 +200,7 @@
   {
     "seed": 12,
     "profile_name": "Churn basso con outlier",
-    "profile_desc": "Churn rate ~10%. Pochi churner ma con pattern molto distinto. Recall è la metrica critica.",
+    "profile_desc": "Churn rate ~20%. Pochi churner ma con pattern molto distinto. Recall è la metrica critica.",
     "n_rows_train": 8500,
     "n_rows_test": 1500,
     "churn_rate_train": 0.2009,
@@ -212,8 +212,8 @@
     },
     "best_model": "RandomForest",
     "best_auc": 0.7611,
-    "question_business": "Solo il 10% dei clienti abbandona, ma ciascuno rappresenta una perdita significativa. Come bilancereste il costo di un falso allarme vs un churner perso?",
-    "question_technical": "Con un churn rate così basso, l'accuracy è fuorviante (un modello 'tutto No Churn' avrebbe 90%). Quale metrica avete privilegiato e perché?"
+    "question_business": "Solo il 20% dei clienti abbandona, ma ciascuno rappresenta una perdita significativa. Come bilancereste il costo di un falso allarme vs un churner perso?",
+    "question_technical": "Con un churn rate ~20%, l'accuracy non è sufficiente come unica metrica (un modello 'tutto No Churn' avrebbe già l'80%). Quale metrica avete privilegiato e perché?"
   },
   {
     "seed": 13,
