@@ -377,13 +377,21 @@ def _load_manifest_from_zip(zip_path: Path) -> dict[str, Any]:
     return {}
 
 
-def _show_chart(img_bytes: bytes, caption: str = "") -> None:
-    """Mostra un PNG con st.image, gestendo errori silenziosamente."""
+def _show_chart(img_bytes: bytes, caption: str = "", compact: bool = False) -> None:
+    """Mostra un PNG con st.image, gestendo errori silenziosamente.
+
+    compact=True → occupa il 65% della larghezza del container.
+    """
     if not img_bytes:
         return
     try:
         import io
-        st.image(io.BytesIO(img_bytes), caption=caption, use_container_width=True)
+        if compact:
+            col, _ = st.columns([13, 7])
+            with col:
+                st.image(io.BytesIO(img_bytes), caption=caption, use_container_width=True)
+        else:
+            st.image(io.BytesIO(img_bytes), caption=caption, use_container_width=True)
     except Exception:
         st.caption(f"⚠️ Impossibile visualizzare: {caption}")
 
@@ -486,8 +494,20 @@ def _render_pitch_view(seed: int, path: Path) -> None:
 
     # ── 4. Modello finale ────────────────────────────────────────────────────
     with st.expander("🎯 4 — Modello Finale", expanded=True):
-        for name, img in model_imgs.items():
-            _show_chart(img, _chart_cap(name, "model_"))
+        roc_img  = next((v for k, v in model_imgs.items() if "roc" in k.lower()), None)
+        cm_img   = next((v for k, v in model_imgs.items() if "confusion" in k.lower()), None)
+        fi_imgs  = {k: v for k, v in model_imgs.items()
+                    if "roc" not in k.lower() and "confusion" not in k.lower()}
+        if roc_img or cm_img:
+            _c1, _c2 = st.columns(2)
+            with _c1:
+                if roc_img:
+                    _show_chart(roc_img, "ROC Curve")
+            with _c2:
+                if cm_img:
+                    _show_chart(cm_img, "Confusion Matrix")
+        for name, img in fi_imgs.items():
+            _show_chart(img, _chart_cap(name, "model_"), compact=True)
         if not model_imgs:
             st.caption("Nessun grafico modello nel pacchetto.")
 
@@ -495,7 +515,7 @@ def _render_pitch_view(seed: int, path: Path) -> None:
     if shap_imgs:
         with st.expander("🔍 5 — Interpretabilità SHAP", expanded=False):
             for name, img in shap_imgs.items():
-                _show_chart(img, _chart_cap(name, "shap_"))
+                _show_chart(img, _chart_cap(name, "shap_"), compact=True)
 
     # ── 6. Interpretazione del gruppo ────────────────────────────────────────
     with st.expander("💬 6 — Interpretazione del Gruppo", expanded=False):
@@ -515,30 +535,7 @@ def _render_pitch_view(seed: int, path: Path) -> None:
         else:
             st.caption("Note del gruppo non disponibili.")
 
-    # ── 7. Domande del docente (dal cheatsheet) ──────────────────────────────
-    cheatsheet_entry = next(
-        (e for e in _CHEATSHEET if e.get("seed") == seed), None
-    )
-    if cheatsheet_entry:
-        with st.expander("❓ 7 — Domande per il Pitch", expanded=True):
-            st.markdown(
-                f"**Profilo dataset:** {cheatsheet_entry.get('profile_name','')}")
-            st.caption(cheatsheet_entry.get("profile_desc", ""))
-            st.markdown("---")
-            st.markdown("**Domanda business:**")
-            st.info(cheatsheet_entry.get("question_business", ""))
-            st.markdown("**Domanda tecnica:**")
-            st.info(cheatsheet_entry.get("question_technical", ""))
-            # Baselines di riferimento
-            baselines = cheatsheet_entry.get("baselines", {})
-            if baselines:
-                st.markdown("**Baselines istruttore:**")
-                b_cols = st.columns(len(baselines))
-                for i, (mname, auc_b) in enumerate(baselines.items()):
-                    b_cols[i].metric(mname, f"{auc_b:.4f}")
-    else:
-        with st.expander("❓ 7 — Domande per il Pitch", expanded=True):
-            st.caption("Scheda non trovata nel cheatsheet per questo SEED.")
+
 
 
 def _find_html_report(seed: int, zip_path: Path | None = None) -> str | None:
@@ -588,32 +585,46 @@ def _group_label(bundle: dict[str, Any]) -> str:
 
 
 def _render_metrics(r: dict[str, Any]) -> None:
-    """Mostra le metriche di un gruppo con card HTML e grafico."""
+    """Mostra le metriche di un gruppo: AUC test vs baseline + classification report."""
     delta = r["delta_auc"]
     is_overfit = delta < -0.05
     delta_class = "delta-warn" if is_overfit else "delta-ok"
     delta_symbol = "⚠️" if is_overfit else "✅"
     delta_label = "possibile overfitting" if is_overfit else "generalizza bene"
 
-    # Riga principale: AUC test (prominente) + AUC train + Δ
+    # Baseline
+    baseline_auc = _BEST_AUC.get(r.get("seed"))
+    dvb = (r["auc_test"] - baseline_auc) if baseline_auc is not None else None
+    dvb_color = COLOR_GREEN if (dvb is not None and dvb > 0) else (
+        COLOR_RED if (dvb is not None and dvb < 0) else "#95a5a6")
+    baseline_str = f"{baseline_auc:.4f}" if baseline_auc is not None else "—"
+    dvb_str = f"{dvb:+.4f}" if dvb is not None else "—"
+    dvb_verdict = "✅ sopra baseline" if (dvb is not None and dvb > 0) else (
+        "❌ sotto baseline" if (dvb is not None and dvb < 0) else "")
+
+    # Row 1 — AUC test vs AUC baseline (card grandi)
     st.markdown(
         f"""
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem; margin: 0.8rem 0;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin: 0.8rem 0;">
             <div class="big-metric">
                 <div class="big-metric-value" style="color: {COLOR_BLUE};">{r['auc_test']:.4f}</div>
                 <div class="big-metric-label">AUC — test set</div>
+                <div class="big-metric-delta {delta_class}">Δ train/test {delta:+.4f} &nbsp; {delta_symbol} {delta_label}</div>
             </div>
             <div class="big-metric">
-                <div class="big-metric-value">{r['auc_train']:.4f}</div>
-                <div class="big-metric-label">AUC — train</div>
-                <div class="big-metric-delta {delta_class}">Δ {delta:+.4f} &nbsp; {delta_symbol} {delta_label}</div>
-            </div>
-            <div class="big-metric">
-                <div class="big-metric-value">{r['f1']:.4f}</div>
-                <div class="big-metric-label">F1-Score</div>
+                <div class="big-metric-value" style="color: {dvb_color};">{baseline_str}</div>
+                <div class="big-metric-label">AUC — baseline istruttore</div>
+                <div class="big-metric-delta" style="color:{dvb_color};">Δ vs baseline: {dvb_str} &nbsp; {dvb_verdict}</div>
             </div>
         </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem;">
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Row 2 — Precision / Recall / F1 / Accuracy (classification report)
+    st.markdown(
+        f"""
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem;">
             <div class="big-metric">
                 <div class="big-metric-value" style="font-size:1.4rem;">{r['precision']:.4f}</div>
                 <div class="big-metric-label">Precision</div>
@@ -621,6 +632,10 @@ def _render_metrics(r: dict[str, Any]) -> None:
             <div class="big-metric">
                 <div class="big-metric-value" style="font-size:1.4rem;">{r['recall']:.4f}</div>
                 <div class="big-metric-label">Recall</div>
+            </div>
+            <div class="big-metric">
+                <div class="big-metric-value" style="font-size:1.4rem;">{r['f1']:.4f}</div>
+                <div class="big-metric-label">F1-Score</div>
             </div>
             <div class="big-metric">
                 <div class="big-metric-value" style="font-size:1.4rem;">{r['accuracy']:.4f}</div>
@@ -631,11 +646,13 @@ def _render_metrics(r: dict[str, Any]) -> None:
         unsafe_allow_html=True,
     )
 
-    # Mini bar chart AUC train vs test
-    chart_df = pd.DataFrame(
-        {"AUC": [r["auc_train"], r["auc_test"]]},
-        index=["Train", "Test"],
-    )
+    # Mini bar chart: AUC train / AUC test / baseline
+    chart_data: dict[str, list[float]] = {"AUC": [r["auc_train"], r["auc_test"]]}
+    chart_index = ["Train", "Test"]
+    if baseline_auc is not None:
+        chart_data["AUC"].append(baseline_auc)
+        chart_index.append("Baseline")
+    chart_df = pd.DataFrame(chart_data, index=chart_index)
     st.bar_chart(chart_df, height=160, color=COLOR_BLUE)
 
 
@@ -801,34 +818,6 @@ with tab_submissions:
 
                 if seed in st.session_state["results"]:
                     _render_metrics(st.session_state["results"][seed])
-                    r = st.session_state["results"][seed]
-                    delta = _delta_auc(r["auc_test"], seed)
-                    best_auc = _BEST_AUC.get(seed)
-                    if best_auc is not None and not (isinstance(delta, float) and np.isnan(delta)):
-                        delta_str = f"{delta:+.4f}"
-                        if delta > 0:
-                            box_color = "#2ecc71"
-                            box_bg = "rgba(46,204,113,0.1)"
-                            verdict = "✅ sopra baseline"
-                        elif delta < 0:
-                            box_color = "#e74c3c"
-                            box_bg = "rgba(231,76,60,0.1)"
-                            verdict = "❌ sotto baseline"
-                        else:
-                            box_color = "#95a5a6"
-                            box_bg = "rgba(149,165,166,0.1)"
-                            verdict = "➖ pari al baseline"
-                        st.markdown(
-                            f"""
-                            <div style='margin-top:0.5rem;padding:0.6rem 1rem;
-                                background:{box_bg};border-radius:8px;
-                                border-left:3px solid {box_color};'>
-                            <strong>Δ AUC vs Baseline: <span style='color:{box_color}'>{delta_str}</span></strong>
-                            &nbsp;·&nbsp; {verdict}
-                            &nbsp;·&nbsp; Baseline istruttore: <code>{best_auc:.4f}</code>
-                            </div>""",
-                            unsafe_allow_html=True,
-                        )
 
             st.markdown("<hr class='thin-divider'>", unsafe_allow_html=True)
 
@@ -895,6 +884,8 @@ with tab_leaderboard:
             delta_style = f"color:{COLOR_RED};font-weight:700;" if delta < -0.05 else f"color:{COLOR_GREEN};"
             badge = '<span class="badge-overfitting">⚠️ overfitting</span>' if delta < -0.05 else '<span class="badge-ok">✅ ok</span>'
             auc_style = "font-weight:800;font-size:1.05rem;" if rank == 1 else ""
+            baseline_auc_lb = _BEST_AUC.get(r["seed"])
+            baseline_str_lb = f"{baseline_auc_lb:.4f}" if baseline_auc_lb is not None else "—"
             dvb = r.get("delta_vs_baseline", float("nan"))
             if isinstance(dvb, float) and np.isnan(dvb):
                 delta_vs_b_str = "—"
@@ -916,6 +907,7 @@ with tab_leaderboard:
                 <td style="font-family:monospace;opacity:0.7;">{r['model_name']}</td>
                 <td style="text-align:right;opacity:0.65;">{r['auc_train']:.4f}</td>
                 <td style="text-align:right;{auc_style}color:{COLOR_BLUE};">{r['auc_test']:.4f}</td>
+                <td style="text-align:right;opacity:0.75;">{baseline_str_lb}</td>
                 <td style="text-align:right;{delta_style}">{delta:+.4f}</td>
                 <td style="text-align:right;">{r['f1']:.4f}</td>
                 <td style="text-align:right;{delta_vs_b_style}">{delta_vs_b_str}</td>
@@ -935,7 +927,8 @@ with tab_leaderboard:
                         <th style="padding:0.5rem 0.7rem;">Modello</th>
                         <th style="text-align:right;padding:0.5rem 0.7rem;">AUC train</th>
                         <th style="text-align:right;padding:0.5rem 0.7rem;">AUC test</th>
-                        <th style="text-align:right;padding:0.5rem 0.7rem;">Δ</th>
+                        <th style="text-align:right;padding:0.5rem 0.7rem;">Baseline</th>
+                        <th style="text-align:right;padding:0.5rem 0.7rem;">Δ train/test</th>
                         <th style="text-align:right;padding:0.5rem 0.7rem;">F1</th>
                         {score_header}
                         <th style="padding:0.5rem 0.7rem;">Stato</th>
