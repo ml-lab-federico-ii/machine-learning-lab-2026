@@ -8,7 +8,10 @@ Workflow:
     2. Tab "Submissions" → per ogni gruppo che ha fatto il pitch, cliccare "▶ Evaluta".
     3. Tab "Leaderboard" → riepilogo finale di tutti i gruppi valutati.
 
-I .joblib consegnati dagli studenti vanno copiati in:
+Gli ZIP consegnati dagli studenti vanno copiati in:
+    challenge/submissions/delivery_seed_XX.zip
+
+Sono supportati anche i .joblib sciolti (compatibilità backward):
     challenge/submissions/model_seed_XX.joblib
 """
 
@@ -272,9 +275,23 @@ def _apply_preprocessing(
     return X, y_test
 
 
+def _load_bundle(path: Path) -> dict[str, Any]:
+    """Carica il bundle joblib da un file .joblib o da un .zip che lo contiene."""
+    if path.suffix == ".zip":
+        import zipfile, io
+        with zipfile.ZipFile(path, "r") as zf:
+            joblib_names = [n for n in zf.namelist() if n.endswith(".joblib")]
+            if not joblib_names:
+                raise ValueError(f"Nessun .joblib trovato in {path.name}")
+            with zf.open(joblib_names[0]) as f:
+                return joblib.load(io.BytesIO(f.read()))
+    else:
+        return joblib.load(path)
+
+
 def _evaluate_bundle(seed: int, path: Path) -> dict[str, Any]:
     """Carica il bundle, applica preprocessing, calcola metriche sul test set."""
-    bundle: dict[str, Any] = joblib.load(path)
+    bundle: dict[str, Any] = _load_bundle(path)
 
     df_test = _load_test_csv(seed)
     X_test, y_test = _apply_preprocessing(df_test, bundle)
@@ -308,27 +325,51 @@ def _evaluate_bundle(seed: int, path: Path) -> dict[str, Any]:
 
 
 def _scan_submissions() -> dict[int, Path]:
-    """Restituisce {seed: path_joblib} per tutti i model_seed_XX.joblib trovati."""
+    """Restituisce {seed: path} per tutti i delivery_seed_XX.zip (o model_seed_XX.joblib) trovati."""
     SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
     found: dict[int, Path] = {}
-    for p in sorted(SUBMISSIONS_DIR.glob("model_seed_*.joblib")):
+    # ZIP prioritario
+    for p in sorted(SUBMISSIONS_DIR.glob("delivery_seed_*.zip")):
         try:
             seed = int(p.stem.split("_")[-1])
             found[seed] = p
         except ValueError:
             continue
+    # Fallback: joblib sciolti (compatibilità backward)
+    for p in sorted(SUBMISSIONS_DIR.glob("model_seed_*.joblib")):
+        try:
+            seed = int(p.stem.split("_")[-1])
+            if seed not in found:  # non sovrascrivere lo ZIP
+                found[seed] = p
+        except ValueError:
+            continue
     return found
 
 
-def _find_html_report(seed: int) -> Path | None:
-    """Cerca il report HTML del gruppo per il seed dato."""
+def _find_html_report(seed: int, zip_path: Path | None = None) -> str | None:
+    """Legge il contenuto HTML del report (dal ZIP o da file sciolto).
+
+    Restituisce il contenuto HTML come stringa, o None se non trovato.
+    """
+    # Prima cerca dentro lo ZIP se disponibile
+    if zip_path is not None and zip_path.suffix == ".zip":
+        import zipfile
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                html_names = [n for n in zf.namelist() if n.endswith(".html")]
+                if html_names:
+                    with zf.open(html_names[0]) as f:
+                        return f.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+    # Fallback: file HTML sciolto
     candidates = [
         SUBMISSIONS_DIR / f"team_seed_{seed:02d}_report.html",
         SUBMISSIONS_DIR / f"report_seed_{seed:02d}.html",
     ]
     for p in candidates:
         if p.exists():
-            return p
+            return p.read_text(encoding="utf-8", errors="replace")
     return None
 
 
@@ -486,14 +527,14 @@ with tab_submissions:
     if not submissions_all:
         st.warning(
             "Nessun file trovato in `challenge/submissions/`.\n\n"
-            "Copia i `.joblib` ricevuti dagli studenti in quella cartella, "
+            "Copia i file `delivery_seed_XX.zip` ricevuti dagli studenti in quella cartella, "
             "poi aggiorna la pagina."
         )
     else:
         for seed, path in submissions_all.items():
             # Leggi preview bundle (nome gruppo, modello)
             try:
-                preview: dict[str, Any] = joblib.load(path)
+                preview: dict[str, Any] = _load_bundle(path)
                 group = _group_label(preview)
                 model_name = preview.get("model_name", "?")
             except Exception:
@@ -559,13 +600,13 @@ with tab_submissions:
                 _render_metrics(st.session_state["results"][seed])
 
             # Report HTML inline
-            html_path = _find_html_report(seed)
-            if html_path:
+            zip_path = path if path.suffix == ".zip" else None
+            html_content = _find_html_report(seed, zip_path=zip_path)
+            if html_content:
                 with st.expander("📄 Report completo del gruppo", expanded=False):
-                    html_content = html_path.read_text(encoding="utf-8")
                     components.html(html_content, height=900, scrolling=True)
             else:
-                st.caption("📄 Report HTML non ancora ricevuto — atteso `team_seed_{:02d}_report.html` in submissions/".format(seed))
+                st.caption("📄 Report HTML non ancora ricevuto — atteso nello ZIP o come `team_seed_{:02d}_report.html` in submissions/".format(seed))
 
             st.markdown("<hr class='thin-divider'>", unsafe_allow_html=True)
 
