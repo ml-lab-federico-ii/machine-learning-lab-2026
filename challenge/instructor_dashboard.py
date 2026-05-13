@@ -396,8 +396,8 @@ def _show_chart(img_bytes: bytes, caption: str = "", compact: bool = False) -> N
         st.caption(f"⚠️ Impossibile visualizzare: {caption}")
 
 
-def _render_pitch_view(seed: int, path: Path) -> None:
-    """Mostra il racconto lineare del pitch (EDA → Preprocessing → Modelli → Finale → SHAP → Note → Domande)."""
+def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
+    """Mostra il racconto lineare del pitch (EDA → Preprocessing → Modelli → Finale → SHAP → Note)."""
     _zip = path if path.suffix == ".zip" else None
     manifest = _load_manifest_from_zip(_zip) if _zip else {}
     charts = _extract_charts_from_zip(_zip) if _zip else {}
@@ -412,7 +412,7 @@ def _render_pitch_view(seed: int, path: Path) -> None:
                 .replace("_", " ").title())
 
     # ── 1. EDA ──────────────────────────────────────────────────────────────
-    with st.expander("📊 1 — Analisi Esplorativa (EDA)", expanded=True):
+    with st.expander("📊 1 — Analisi Esplorativa (EDA)", expanded=expanded):
         dataset_info = manifest.get("dataset_info", {})
         if dataset_info:
             cols = st.columns(4)
@@ -424,12 +424,23 @@ def _render_pitch_view(seed: int, path: Path) -> None:
         if eda_notes and eda_notes.strip():
             st.info(eda_notes)
         for name, img in eda_imgs.items():
-            _show_chart(img, _chart_cap(name, "eda_"))
+            _n = name.lower()
+            if "target" in _n:
+                # Grafico singolo a barre — mostra al 45% della larghezza
+                _cc, _ = st.columns([9, 11])
+                with _cc:
+                    _show_chart(img, _chart_cap(name, "eda_"))
+            elif "numeriche" in _n:
+                # Griglia di istogrammi — larghezza piena
+                _show_chart(img, _chart_cap(name, "eda_"))
+            else:
+                # Heatmap, categoriche, boxplot — 65% larghezza
+                _show_chart(img, _chart_cap(name, "eda_"), compact=True)
         if not eda_imgs:
             st.caption("Nessun grafico EDA nel pacchetto — re-eseguire il notebook con la versione aggiornata.")
 
     # ── 2. Preprocessing ────────────────────────────────────────────────────
-    with st.expander("⚙️ 2 — Preprocessing", expanded=False):
+    with st.expander("⚙️ 2 — Preprocessing", expanded=expanded):
         prep = manifest.get("preprocessing_config", {})
         if not prep:
             # fallback da bundle
@@ -463,7 +474,7 @@ def _render_pitch_view(seed: int, path: Path) -> None:
             st.caption("Configurazione preprocessing non disponibile (pacchetto vecchio).")
 
     # ── 3. Tutti i modelli testati ───────────────────────────────────────────
-    with st.expander("🔬 3 — Modelli Testati", expanded=False):
+    with st.expander("🔬 3 — Modelli Testati", expanded=expanded):
         runs = manifest.get("model_results_summary", [])
         final_idx = manifest.get("final_model_idx", 0)
         if runs:
@@ -493,7 +504,7 @@ def _render_pitch_view(seed: int, path: Path) -> None:
             st.caption("Riepilogo run non disponibile (pacchetto vecchio).")
 
     # ── 4. Modello finale ────────────────────────────────────────────────────
-    with st.expander("🎯 4 — Modello Finale", expanded=True):
+    with st.expander("🎯 4 — Modello Finale", expanded=expanded):
         roc_img  = next((v for k, v in model_imgs.items() if "roc" in k.lower()), None)
         cm_img   = next((v for k, v in model_imgs.items() if "confusion" in k.lower()), None)
         fi_imgs  = {k: v for k, v in model_imgs.items()
@@ -513,12 +524,12 @@ def _render_pitch_view(seed: int, path: Path) -> None:
 
     # ── 5. SHAP ──────────────────────────────────────────────────────────────
     if shap_imgs:
-        with st.expander("🔍 5 — Interpretabilità SHAP", expanded=False):
+        with st.expander("🔍 5 — Interpretabilità SHAP", expanded=expanded):
             for name, img in shap_imgs.items():
                 _show_chart(img, _chart_cap(name, "shap_"), compact=True)
 
     # ── 6. Interpretazione del gruppo ────────────────────────────────────────
-    with st.expander("💬 6 — Interpretazione del Gruppo", expanded=False):
+    with st.expander("💬 6 — Interpretazione del Gruppo", expanded=expanded):
         notes = manifest.get("team_notes", {})
         if notes:
             labels = {
@@ -765,23 +776,37 @@ with tab_submissions:
                 else '<span class="status-badge status-pending">⏳ In attesa</span>'
             )
 
-            # Card header
-            st.markdown(
-                f"""
-                <div class="group-card {card_class}">
-                    <div class="card-header">
-                        <span class="card-seed">SEED {seed:02d}</span>
-                        <span class="card-group">{group}</span>
-                        <span class="card-model">{model_name}</span>
-                        {status_html}
+            # Card header + bottone expand/collapse
+            _col_hdr, _col_btn = st.columns([5, 1])
+            with _col_hdr:
+                st.markdown(
+                    f"""
+                    <div class="group-card {card_class}">
+                        <div class="card-header">
+                            <span class="card-seed">SEED {seed:02d}</span>
+                            <span class="card-group">{group}</span>
+                            <span class="card-model">{model_name}</span>
+                            {status_html}
+                        </div>
                     </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with _col_btn:
+                _exp_key = f"pitch_open_{seed}"
+                if _exp_key not in st.session_state:
+                    st.session_state[_exp_key] = False
+                _is_open = st.session_state[_exp_key]
+                if st.button(
+                    "📂 Espandi" if not _is_open else "📁 Chiudi",
+                    key=f"toggle_pitch_{seed}",
+                    use_container_width=True,
+                ):
+                    st.session_state[_exp_key] = not _is_open
+                    st.rerun()
 
-            # ── Racconto lineare del pitch ───────────────────────────────────
-            _render_pitch_view(seed, path)
+            # ── Racconto lineare del pitch ───────────────────────────────────────────
+            _render_pitch_view(seed, path, expanded=st.session_state.get(f"pitch_open_{seed}", False))
 
             # ── 8. Valutazione docente ───────────────────────────────────────
             with st.expander("📈 8 — Valutazione sul Test Set", expanded=already_evaluated):
