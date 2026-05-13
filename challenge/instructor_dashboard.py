@@ -404,7 +404,6 @@ def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
 
     eda_imgs   = {k: v for k, v in sorted(charts.items()) if "/eda_" in k}
     model_imgs = {k: v for k, v in sorted(charts.items()) if "/model_" in k}
-    shap_imgs  = {k: v for k, v in sorted(charts.items()) if "/shap_" in k}
 
     def _chart_cap(name: str, prefix: str) -> str:
         return (name.split("/")[-1]
@@ -524,11 +523,6 @@ def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
         if not model_imgs:
             st.caption("Nessun grafico modello nel pacchetto.")
 
-    # ── 5. SHAP ──────────────────────────────────────────────────────────────
-    if shap_imgs:
-        with st.expander("🔍 5 — Interpretabilità SHAP", expanded=expanded):
-            for name, img in shap_imgs.items():
-                _show_chart(img, _chart_cap(name, "shap_"))
 
     # ── 6. Interpretazione del gruppo ────────────────────────────────────────
     with st.expander("💬 6 — Interpretazione del Gruppo", expanded=expanded):
