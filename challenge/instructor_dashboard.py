@@ -483,10 +483,16 @@ def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
             for i, r in enumerate(runs):
                 sel = "✅" if i == final_idx else ""
                 bold = "font-weight:800;" if i == final_idx else ""
+                params = r.get("params", {})
+                params_str = ", ".join(
+                    f"<code style='font-size:0.78rem;'>{k}={v}</code>"
+                    for k, v in params.items()
+                ) if params else "—"
                 rows_html += (
                     f"<tr style='{bold}background:{'rgba(52,152,219,0.08)' if i == final_idx else 'transparent'}'>"
                     f"<td style='text-align:center'>{sel} Run #{i+1}</td>"
                     f"<td>{r.get('model_name','?')}</td>"
+                    f"<td style='font-size:0.82rem;'>{params_str}</td>"
                     f"<td style='text-align:right'>{r.get('auc',0):.4f}</td>"
                     f"<td style='text-align:right'>{r.get('f1',0):.4f}</td>"
                     f"<td style='text-align:right'>{r.get('precision',0):.4f}</td>"
@@ -496,7 +502,7 @@ def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
             st.markdown(
                 f"""<table style='width:100%;border-collapse:collapse;font-size:0.9rem;'>
                 <thead><tr style='opacity:0.5;font-size:0.75rem;text-transform:uppercase;border-bottom:1px solid #ccc;'>
-                <th>Run</th><th>Modello</th><th style='text-align:right'>AUC val</th>
+                <th>Run</th><th>Modello</th><th>Parametri</th><th style='text-align:right'>AUC val</th>
                 <th style='text-align:right'>F1</th><th style='text-align:right'>Prec</th><th style='text-align:right'>Rec</th>
                 </tr></thead><tbody>{rows_html}</tbody></table>""",
                 unsafe_allow_html=True,
@@ -506,6 +512,16 @@ def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
 
     # ── 4. Modello finale ────────────────────────────────────────────────────
     with st.expander("🎯 4 — Modello Finale", expanded=expanded):
+        # Soglia di classificazione scelta dal gruppo
+        soglia = manifest.get("soglia")
+        if soglia is not None:
+            _s_color = "#f0a500" if soglia != 0.5 else "#95a5a6"
+            st.markdown(
+                f"<span style='font-size:0.9rem;'>Soglia di classificazione scelta: "
+                f"<code style='color:{_s_color};font-weight:700;'>{soglia:.2f}</code>"
+                f"{'  ← personalizzata' if soglia != 0.5 else '  (default)'}</span>",
+                unsafe_allow_html=True,
+            )
         roc_img  = next((v for k, v in model_imgs.items() if "roc" in k.lower()), None)
         cm_img   = next((v for k, v in model_imgs.items() if "confusion" in k.lower()), None)
         fi_imgs  = {k: v for k, v in model_imgs.items()
@@ -805,7 +821,7 @@ with tab_submissions:
             _render_pitch_view(seed, path, expanded=st.session_state.get(f"pitch_open_{seed}", False))
 
             # ── 8. Valutazione docente ───────────────────────────────────────
-            with st.expander("📈 8 — Valutazione sul Test Set", expanded=already_evaluated):
+            with st.expander("📈 7 — Valutazione sul Test Set", expanded=already_evaluated):
                 col_btn, col_hint = st.columns([2, 5])
                 with col_btn:
                     eval_btn = st.button(
