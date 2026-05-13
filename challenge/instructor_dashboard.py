@@ -425,16 +425,18 @@ def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
             st.info(eda_notes)
         for name, img in eda_imgs.items():
             _n = name.lower()
-            if "target" in _n:
-                # Grafico singolo a barre — mostra al 45% della larghezza
+            # Slug attesi: distribuzione_target | distribuzioni_numeriche |
+            #              distribuzioni_categoriche | feature_vs_target | matrice_di_correlazione
+            if "distribuzione_target" in _n:
+                # Singolo bar chart — 45% della larghezza
                 _cc, _ = st.columns([9, 11])
                 with _cc:
                     _show_chart(img, _chart_cap(name, "eda_"))
-            elif "numeriche" in _n:
-                # Griglia di istogrammi — larghezza piena
+            elif "numeriche" in _n or "feature_vs_target" in _n or "feature_vs" in _n:
+                # Griglie multi-subplot — larghezza piena
                 _show_chart(img, _chart_cap(name, "eda_"))
             else:
-                # Heatmap, categoriche, boxplot — 65% larghezza
+                # Heatmap correlazione, distribuzioni categoriche — 65% larghezza
                 _show_chart(img, _chart_cap(name, "eda_"), compact=True)
         if not eda_imgs:
             st.caption("Nessun grafico EDA nel pacchetto — re-eseguire il notebook con la versione aggiornata.")
@@ -526,7 +528,7 @@ def _render_pitch_view(seed: int, path: Path, expanded: bool = False) -> None:
     if shap_imgs:
         with st.expander("🔍 5 — Interpretabilità SHAP", expanded=expanded):
             for name, img in shap_imgs.items():
-                _show_chart(img, _chart_cap(name, "shap_"), compact=True)
+                _show_chart(img, _chart_cap(name, "shap_"))
 
     # ── 6. Interpretazione del gruppo ────────────────────────────────────────
     with st.expander("💬 6 — Interpretazione del Gruppo", expanded=expanded):
