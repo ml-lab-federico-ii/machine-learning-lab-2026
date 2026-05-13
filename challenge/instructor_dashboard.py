@@ -568,16 +568,16 @@ def _find_html_report(seed: int, zip_path: Path | None = None) -> str | None:
     return None
 
 
-def _normalized_score(auc_test: float, seed: int) -> float:
-    """Score normalizzato: (AUC_studente - 0.5) / (AUC_istruttore - 0.5).
+def _delta_auc(auc_test: float, seed: int) -> float:
+    """Delta AUC vs baseline istruttore: AUC_studente − AUC_baseline.
 
     Permette confronto equo tra seed di diversa difficoltà.
-    Score = 1.0 significa pari all'istruttore; > 1.0 = meglio dell'istruttore.
+    Δ > 0 = studente batte il baseline; Δ < 0 = sotto baseline.
     """
     best = _BEST_AUC.get(seed)
-    if best is None or best <= 0.5:
+    if best is None:
         return float("nan")
-    return (auc_test - 0.5) / (best - 0.5)
+    return auc_test - best
 
 
 def _group_label(bundle: dict[str, Any]) -> str:
@@ -802,18 +802,30 @@ with tab_submissions:
                 if seed in st.session_state["results"]:
                     _render_metrics(st.session_state["results"][seed])
                     r = st.session_state["results"][seed]
-                    score = _normalized_score(r["auc_test"], seed)
+                    delta = _delta_auc(r["auc_test"], seed)
                     best_auc = _BEST_AUC.get(seed)
-                    if best_auc is not None:
-                        s_str = f"{score:.2%}" if not (isinstance(score, float) and np.isnan(score)) else "—"
+                    if best_auc is not None and not (isinstance(delta, float) and np.isnan(delta)):
+                        delta_str = f"{delta:+.4f}"
+                        if delta > 0:
+                            box_color = "#2ecc71"
+                            box_bg = "rgba(46,204,113,0.1)"
+                            verdict = "✅ sopra baseline"
+                        elif delta < 0:
+                            box_color = "#e74c3c"
+                            box_bg = "rgba(231,76,60,0.1)"
+                            verdict = "❌ sotto baseline"
+                        else:
+                            box_color = "#95a5a6"
+                            box_bg = "rgba(149,165,166,0.1)"
+                            verdict = "➖ pari al baseline"
                         st.markdown(
                             f"""
                             <div style='margin-top:0.5rem;padding:0.6rem 1rem;
-                                background:rgba(240,165,0,0.1);border-radius:8px;
-                                border-left:3px solid #f0a500;'>
-                            <strong>Score normalizzato: {s_str}</strong> &nbsp;·&nbsp;
-                            Best AUC istruttore: <code>{best_auc:.4f}</code> &nbsp;·&nbsp;
-                            Score = (AUC_test − 0.5) / (AUC_istruttore − 0.5)
+                                background:{box_bg};border-radius:8px;
+                                border-left:3px solid {box_color};'>
+                            <strong>Δ AUC vs Baseline: <span style='color:{box_color}'>{delta_str}</span></strong>
+                            &nbsp;·&nbsp; {verdict}
+                            &nbsp;·&nbsp; Baseline istruttore: <code>{best_auc:.4f}</code>
                             </div>""",
                             unsafe_allow_html=True,
                         )
@@ -859,13 +871,13 @@ with tab_leaderboard:
             "Usa la tab **📋 Submissions** per valutare i gruppi durante i pitch."
         )
     else:
-        # Calcola score normalizzato e ordina per score
+        # Calcola Δ AUC vs baseline e ordina per delta decrescente
         for r in results_so_far.values():
-            r["score"] = _normalized_score(r["auc_test"], r["seed"])
+            r["delta_vs_baseline"] = _delta_auc(r["auc_test"], r["seed"])
 
         rows = sorted(
             results_so_far.values(),
-            key=lambda r: r.get("score", 0) if not (isinstance(r.get("score"), float) and np.isnan(r.get("score", 0))) else 0,
+            key=lambda r: r.get("delta_vs_baseline", float("-inf")) if not (isinstance(r.get("delta_vs_baseline"), float) and np.isnan(r.get("delta_vs_baseline", 0.0))) else float("-inf"),
             reverse=True,
         )
 
@@ -883,9 +895,19 @@ with tab_leaderboard:
             delta_style = f"color:{COLOR_RED};font-weight:700;" if delta < -0.05 else f"color:{COLOR_GREEN};"
             badge = '<span class="badge-overfitting">⚠️ overfitting</span>' if delta < -0.05 else '<span class="badge-ok">✅ ok</span>'
             auc_style = "font-weight:800;font-size:1.05rem;" if rank == 1 else ""
-            score = r.get("score", float("nan"))
-            score_str = f"{score:.2%}" if not (isinstance(score, float) and np.isnan(score)) else "—"
-            score_style = "font-weight:800;color:#f0a500;" if rank == 1 else ""
+            dvb = r.get("delta_vs_baseline", float("nan"))
+            if isinstance(dvb, float) and np.isnan(dvb):
+                delta_vs_b_str = "—"
+                delta_vs_b_style = "opacity:0.4;"
+            elif dvb > 0:
+                delta_vs_b_str = f"{dvb:+.4f}"
+                delta_vs_b_style = f"color:{COLOR_GREEN};font-weight:700;"
+            elif dvb < 0:
+                delta_vs_b_str = f"{dvb:+.4f}"
+                delta_vs_b_style = f"color:{COLOR_RED};font-weight:700;"
+            else:
+                delta_vs_b_str = "±0.0000"
+                delta_vs_b_style = "opacity:0.6;"
             table_rows_html += f"""
             <tr>
                 <td style="text-align:center;font-size:1.2rem;">{rank_display}</td>
@@ -896,11 +918,11 @@ with tab_leaderboard:
                 <td style="text-align:right;{auc_style}color:{COLOR_BLUE};">{r['auc_test']:.4f}</td>
                 <td style="text-align:right;{delta_style}">{delta:+.4f}</td>
                 <td style="text-align:right;">{r['f1']:.4f}</td>
-                <td style="text-align:right;{score_style}">{score_str}</td>
+                <td style="text-align:right;{delta_vs_b_style}">{delta_vs_b_str}</td>
                 <td>{badge}</td>
             </tr>"""
 
-        score_header = "<th style='text-align:right;padding:0.5rem 0.7rem;'>Score</th>" if has_cheatsheet else ""
+        score_header = "<th style='text-align:right;padding:0.5rem 0.7rem;'>Δ vs Baseline</th>" if has_cheatsheet else ""
         st.markdown(
             f"""
             <table style="width:100%;border-collapse:collapse;font-size:0.95rem;">
@@ -924,8 +946,8 @@ with tab_leaderboard:
                 </tbody>
             </table>
             <div style="margin-top:0.8rem;font-size:0.8rem;opacity:0.5;">
-                Score = (AUC_test − 0.5) / (AUC_istruttore − 0.5) &nbsp;·&nbsp;
-                Δ = AUC_test − AUC_train &nbsp;·&nbsp; ⚠️ overfitting se Δ &lt; −0.05
+                Δ vs Baseline = AUC_test − miglior modello baseline istruttore &nbsp;·&nbsp;
+                Δ train/test = AUC_test − AUC_train &nbsp;·&nbsp; ⚠️ overfitting se Δ train/test &lt; −0.05
             </div>
             """,
             unsafe_allow_html=True,
