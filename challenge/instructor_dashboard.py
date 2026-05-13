@@ -346,6 +346,22 @@ def _scan_submissions() -> dict[int, Path]:
     return found
 
 
+def _extract_charts_from_zip(zip_path: Path) -> dict[str, bytes]:
+    """Estrae i PNG da charts/ dentro lo ZIP. Restituisce {nome_file: bytes}."""
+    charts: dict[str, bytes] = {}
+    if zip_path is None or zip_path.suffix != ".zip":
+        return charts
+    try:
+        import zipfile
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for name in zf.namelist():
+                if name.startswith("charts/") and name.endswith(".png"):
+                    charts[name] = zf.read(name)
+    except Exception:
+        pass
+    return charts
+
+
 def _find_html_report(seed: int, zip_path: Path | None = None) -> str | None:
     """Legge il contenuto HTML del report (dal ZIP o da file sciolto).
 
@@ -487,6 +503,10 @@ with st.sidebar:
             """,
             unsafe_allow_html=True,
         )
+        st.divider()
+        if st.button("🔄 Aggiorna submissions", use_container_width=True,
+                     help="Rilegge i file nella cartella submissions/ senza resettare sessione e risultati"):
+            st.rerun()
 
 if not st.session_state["authenticated"]:
     st.markdown('<div class="dash-title">🎓 ML Challenge — Dashboard Docente</div>', unsafe_allow_html=True)
@@ -599,14 +619,63 @@ with tab_submissions:
             if seed in st.session_state["results"]:
                 _render_metrics(st.session_state["results"][seed])
 
-            # Report HTML inline
-            zip_path = path if path.suffix == ".zip" else None
-            html_content = _find_html_report(seed, zip_path=zip_path)
-            if html_content:
-                with st.expander("📄 Report completo del gruppo", expanded=False):
-                    components.html(html_content, height=900, scrolling=True)
+            # Grafici via st.image() (PNG ad alta res dallo ZIP) o fallback HTML
+            _zip_path = path if path.suffix == ".zip" else None
+            charts = _extract_charts_from_zip(_zip_path) if _zip_path else {}
+
+            if charts:
+                eda_imgs   = {k: v for k, v in sorted(charts.items()) if "/eda_" in k}
+                model_imgs = {k: v for k, v in sorted(charts.items()) if "/model_" in k}
+                shap_imgs  = {k: v for k, v in sorted(charts.items()) if "/shap_" in k}
+
+                tab_labels: list[str] = []
+                if eda_imgs:   tab_labels.append("📊 EDA")
+                if model_imgs: tab_labels.append("🤖 Modello")
+                if shap_imgs:  tab_labels.append("🔍 SHAP")
+
+                if tab_labels:
+                    chart_tabs = st.tabs(tab_labels)
+                    _ti = 0
+                    if eda_imgs:
+                        with chart_tabs[_ti]:
+                            for _name, _img in eda_imgs.items():
+                                _cap = (_name.split("/")[-1]
+                                        .replace(".png", "").replace("eda_", "")
+                                        .replace("_", " ").title())
+                                st.image(_img, caption=_cap, use_column_width=True)
+                        _ti += 1
+                    if model_imgs:
+                        with chart_tabs[_ti]:
+                            for _name, _img in model_imgs.items():
+                                _cap = (_name.split("/")[-1]
+                                        .replace(".png", "").replace("model_", "")
+                                        .replace("_", " ").title())
+                                st.image(_img, caption=_cap, use_column_width=True)
+                        _ti += 1
+                    if shap_imgs:
+                        with chart_tabs[_ti]:
+                            for _name, _img in shap_imgs.items():
+                                _cap = (_name.split("/")[-1]
+                                        .replace(".png", "").replace("shap_", "")
+                                        .replace("_", " ").title())
+                                st.image(_img, caption=_cap, use_column_width=True)
+
+                # HTML completo come expander collassato (sempre utile come riferimento)
+                _html = _find_html_report(seed, zip_path=_zip_path)
+                if _html:
+                    with st.expander("📄 Report HTML completo", expanded=False):
+                        components.html(_html, height=900, scrolling=True)
             else:
-                st.caption("📄 Report HTML non ancora ricevuto — atteso nello ZIP o come `team_seed_{:02d}_report.html` in submissions/".format(seed))
+                # Nessun PNG nello ZIP (ZIP vecchi) — fallback iframe HTML
+                _html = _find_html_report(seed, zip_path=_zip_path)
+                if _html:
+                    with st.expander("📄 Report completo del gruppo", expanded=False):
+                        components.html(_html, height=900, scrolling=True)
+                else:
+                    st.caption(
+                        "📄 Report non ancora ricevuto — atteso nello ZIP "
+                        "o come `team_seed_{:02d}_report.html`".format(seed)
+                    )
 
             st.markdown("<hr class='thin-divider'>", unsafe_allow_html=True)
 
