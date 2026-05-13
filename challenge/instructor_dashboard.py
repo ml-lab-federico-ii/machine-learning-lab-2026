@@ -50,11 +50,10 @@ TARGET_COLUMN = "Exited"
 # Cheatsheet docente — baseline AUC per seed
 _CHEATSHEET_PATH = SCRIPT_DIR / "instructor_cheatsheet.json"
 if _CHEATSHEET_PATH.exists():
-    _BEST_AUC: dict[int, float] = {
-        e["seed"]: e["best_auc"]
-        for e in json.loads(_CHEATSHEET_PATH.read_text(encoding="utf-8"))
-    }
+    _CHEATSHEET: list[dict] = json.loads(_CHEATSHEET_PATH.read_text(encoding="utf-8"))
+    _BEST_AUC: dict[int, float] = {e["seed"]: e["best_auc"] for e in _CHEATSHEET}
 else:
+    _CHEATSHEET = []
     _BEST_AUC = {}
 
 # Colori semantici (compatibili dark/light Streamlit)
@@ -356,10 +355,190 @@ def _extract_charts_from_zip(zip_path: Path) -> dict[str, bytes]:
         with zipfile.ZipFile(zip_path, "r") as zf:
             for name in zf.namelist():
                 if name.startswith("charts/") and name.endswith(".png"):
-                    charts[name] = zf.read(name)
+                    data = zf.read(name)
+                    if len(data) > 0:  # salta PNG vuoti
+                        charts[name] = data
     except Exception:
         pass
     return charts
+
+
+def _load_manifest_from_zip(zip_path: Path) -> dict[str, Any]:
+    """Legge manifest.json dallo ZIP. Restituisce dict vuoto se non trovato."""
+    if zip_path is None or zip_path.suffix != ".zip":
+        return {}
+    try:
+        import zipfile, json
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            if "manifest.json" in zf.namelist():
+                return json.loads(zf.read("manifest.json").decode("utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _show_chart(img_bytes: bytes, caption: str = "") -> None:
+    """Mostra un PNG con st.image, gestendo errori silenziosamente."""
+    if not img_bytes:
+        return
+    try:
+        import io
+        st.image(io.BytesIO(img_bytes), caption=caption, use_container_width=True)
+    except Exception:
+        st.caption(f"⚠️ Impossibile visualizzare: {caption}")
+
+
+def _render_pitch_view(seed: int, path: Path) -> None:
+    """Mostra il racconto lineare del pitch (EDA → Preprocessing → Modelli → Finale → SHAP → Note → Domande)."""
+    _zip = path if path.suffix == ".zip" else None
+    manifest = _load_manifest_from_zip(_zip) if _zip else {}
+    charts = _extract_charts_from_zip(_zip) if _zip else {}
+
+    eda_imgs   = {k: v for k, v in sorted(charts.items()) if "/eda_" in k}
+    model_imgs = {k: v for k, v in sorted(charts.items()) if "/model_" in k}
+    shap_imgs  = {k: v for k, v in sorted(charts.items()) if "/shap_" in k}
+
+    def _chart_cap(name: str, prefix: str) -> str:
+        return (name.split("/")[-1]
+                .replace(".png", "").replace(prefix, "")
+                .replace("_", " ").title())
+
+    # ── 1. EDA ──────────────────────────────────────────────────────────────
+    with st.expander("📊 1 — Analisi Esplorativa (EDA)", expanded=True):
+        dataset_info = manifest.get("dataset_info", {})
+        if dataset_info:
+            cols = st.columns(4)
+            cols[0].metric("Righe", f"{dataset_info.get('n_rows', '—'):,}")
+            cols[1].metric("Feature", dataset_info.get('n_features', '—'))
+            cols[2].metric("Churn rate", f"{dataset_info.get('churn_rate', 0):.1%}")
+            cols[3].metric("SEED", seed)
+        eda_notes = manifest.get("eda_notes", "")
+        if eda_notes and eda_notes.strip():
+            st.info(eda_notes)
+        for name, img in eda_imgs.items():
+            _show_chart(img, _chart_cap(name, "eda_"))
+        if not eda_imgs:
+            st.caption("Nessun grafico EDA nel pacchetto — re-eseguire il notebook con la versione aggiornata.")
+
+    # ── 2. Preprocessing ────────────────────────────────────────────────────
+    with st.expander("⚙️ 2 — Preprocessing", expanded=False):
+        prep = manifest.get("preprocessing_config", {})
+        if not prep:
+            # fallback da bundle
+            try:
+                _b = _load_bundle(path)
+                prep = {
+                    "exclude_features": _b.get("exclude_features", []),
+                    "balance_is_zero": _b.get("balance_is_zero", True),
+                }
+            except Exception:
+                prep = {}
+        if prep:
+            cols = st.columns(2)
+            with cols[0]:
+                st.markdown("**Scaling**")
+                st.code(prep.get("scaling", "standard"))
+                st.markdown("**Encoding categoriche**")
+                st.code(prep.get("encoding", "label_encoder"))
+                st.markdown("**Feature escluse**")
+                excl = prep.get("exclude_features", [])
+                st.code(", ".join(excl) if excl else "nessuna")
+            with cols[1]:
+                st.markdown("**Bilanciamento classi**")
+                strat = prep.get("imbalance_strategy", "class_weight")
+                st.code(strat)
+                st.markdown("**Balance = zero**")
+                st.code(str(prep.get("balance_is_zero", True)))
+                st.markdown("**Train/Val split**")
+                st.code(f"{(1 - prep.get('test_size', 0.2)):.0%} / {prep.get('test_size', 0.2):.0%}")
+        else:
+            st.caption("Configurazione preprocessing non disponibile (pacchetto vecchio).")
+
+    # ── 3. Tutti i modelli testati ───────────────────────────────────────────
+    with st.expander("🔬 3 — Modelli Testati", expanded=False):
+        runs = manifest.get("model_results_summary", [])
+        final_idx = manifest.get("final_model_idx", 0)
+        if runs:
+            rows_html = ""
+            for i, r in enumerate(runs):
+                sel = "✅" if i == final_idx else ""
+                bold = "font-weight:800;" if i == final_idx else ""
+                rows_html += (
+                    f"<tr style='{bold}background:{'rgba(52,152,219,0.08)' if i == final_idx else 'transparent'}'>"
+                    f"<td style='text-align:center'>{sel} Run #{i+1}</td>"
+                    f"<td>{r.get('model_name','?')}</td>"
+                    f"<td style='text-align:right'>{r.get('auc',0):.4f}</td>"
+                    f"<td style='text-align:right'>{r.get('f1',0):.4f}</td>"
+                    f"<td style='text-align:right'>{r.get('precision',0):.4f}</td>"
+                    f"<td style='text-align:right'>{r.get('recall',0):.4f}</td>"
+                    f"</tr>"
+                )
+            st.markdown(
+                f"""<table style='width:100%;border-collapse:collapse;font-size:0.9rem;'>
+                <thead><tr style='opacity:0.5;font-size:0.75rem;text-transform:uppercase;border-bottom:1px solid #ccc;'>
+                <th>Run</th><th>Modello</th><th style='text-align:right'>AUC val</th>
+                <th style='text-align:right'>F1</th><th style='text-align:right'>Prec</th><th style='text-align:right'>Rec</th>
+                </tr></thead><tbody>{rows_html}</tbody></table>""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("Riepilogo run non disponibile (pacchetto vecchio).")
+
+    # ── 4. Modello finale ────────────────────────────────────────────────────
+    with st.expander("🎯 4 — Modello Finale", expanded=True):
+        for name, img in model_imgs.items():
+            _show_chart(img, _chart_cap(name, "model_"))
+        if not model_imgs:
+            st.caption("Nessun grafico modello nel pacchetto.")
+
+    # ── 5. SHAP ──────────────────────────────────────────────────────────────
+    if shap_imgs:
+        with st.expander("🔍 5 — Interpretabilità SHAP", expanded=False):
+            for name, img in shap_imgs.items():
+                _show_chart(img, _chart_cap(name, "shap_"))
+
+    # ── 6. Interpretazione del gruppo ────────────────────────────────────────
+    with st.expander("💬 6 — Interpretazione del Gruppo", expanded=False):
+        notes = manifest.get("team_notes", {})
+        if notes:
+            labels = {
+                "motivazione": "Perché questo modello?",
+                "business_insight": "Insight di business",
+                "strategia_retention": "Strategia di retention",
+            }
+            for key, label in labels.items():
+                val = notes.get(key, "").strip()
+                if val and "Sostituite questo testo" not in val:
+                    st.markdown(f"**{label}**")
+                    st.markdown(val)
+                    st.divider()
+        else:
+            st.caption("Note del gruppo non disponibili.")
+
+    # ── 7. Domande del docente (dal cheatsheet) ──────────────────────────────
+    cheatsheet_entry = next(
+        (e for e in _CHEATSHEET if e.get("seed") == seed), None
+    )
+    if cheatsheet_entry:
+        with st.expander("❓ 7 — Domande per il Pitch", expanded=True):
+            st.markdown(
+                f"**Profilo dataset:** {cheatsheet_entry.get('profile_name','')}")
+            st.caption(cheatsheet_entry.get("profile_desc", ""))
+            st.markdown("---")
+            st.markdown("**Domanda business:**")
+            st.info(cheatsheet_entry.get("question_business", ""))
+            st.markdown("**Domanda tecnica:**")
+            st.info(cheatsheet_entry.get("question_technical", ""))
+            # Baselines di riferimento
+            baselines = cheatsheet_entry.get("baselines", {})
+            if baselines:
+                st.markdown("**Baselines istruttore:**")
+                b_cols = st.columns(len(baselines))
+                for i, (mname, auc_b) in enumerate(baselines.items()):
+                    b_cols[i].metric(mname, f"{auc_b:.4f}")
+    else:
+        with st.expander("❓ 7 — Domande per il Pitch", expanded=True):
+            st.caption("Scheda non trovata nel cheatsheet per questo SEED.")
 
 
 def _find_html_report(seed: int, zip_path: Path | None = None) -> str | None:
@@ -569,7 +748,7 @@ with tab_submissions:
                 else '<span class="status-badge status-pending">⏳ In attesa</span>'
             )
 
-            # Card header HTML
+            # Card header
             st.markdown(
                 f"""
                 <div class="group-card {card_class}">
@@ -584,98 +763,60 @@ with tab_submissions:
                 unsafe_allow_html=True,
             )
 
-            # Bottone e metriche fuori dall'HTML (Streamlit widgets)
-            col_btn, col_hint = st.columns([2, 5])
-            with col_btn:
-                eval_btn = st.button(
-                    f"▶ Evaluta Seed {seed:02d}",
-                    key=f"eval_{seed}",
-                    type="primary" if not already_evaluated else "secondary",
-                    use_container_width=True,
-                )
-            with col_hint:
-                if already_evaluated:
-                    st.caption("Già valutato — clicca di nuovo per rivalutare.")
-                else:
-                    st.caption(f"File: `{path.name}`")
+            # ── Racconto lineare del pitch ───────────────────────────────────
+            _render_pitch_view(seed, path)
 
-            if eval_btn:
-                with st.spinner(f"Valutazione Seed {seed:02d}…"):
-                    try:
-                        result = _evaluate_bundle(seed, path)
-                        st.session_state["results"][seed] = result
-                        auc_te = result["auc_test"]
-                        delta = result["delta_auc"]
-                        flag = "⚠️ possibile overfitting" if delta < -0.05 else "✅ ok"
-                        st.success(
-                            f"**AUC test: {auc_te:.4f}** &nbsp;|&nbsp; "
-                            f"Δ: {delta:+.4f} &nbsp; {flag}"
-                        )
-                    except FileNotFoundError as e:
-                        st.error(str(e))
-                    except Exception as e:
-                        st.error(f"Errore durante la valutazione: {e}")
-
-            if seed in st.session_state["results"]:
-                _render_metrics(st.session_state["results"][seed])
-
-            # Grafici via st.image() (PNG ad alta res dallo ZIP) o fallback HTML
-            _zip_path = path if path.suffix == ".zip" else None
-            charts = _extract_charts_from_zip(_zip_path) if _zip_path else {}
-
-            if charts:
-                eda_imgs   = {k: v for k, v in sorted(charts.items()) if "/eda_" in k}
-                model_imgs = {k: v for k, v in sorted(charts.items()) if "/model_" in k}
-                shap_imgs  = {k: v for k, v in sorted(charts.items()) if "/shap_" in k}
-
-                tab_labels: list[str] = []
-                if eda_imgs:   tab_labels.append("📊 EDA")
-                if model_imgs: tab_labels.append("🤖 Modello")
-                if shap_imgs:  tab_labels.append("🔍 SHAP")
-
-                if tab_labels:
-                    chart_tabs = st.tabs(tab_labels)
-                    _ti = 0
-                    if eda_imgs:
-                        with chart_tabs[_ti]:
-                            for _name, _img in eda_imgs.items():
-                                _cap = (_name.split("/")[-1]
-                                        .replace(".png", "").replace("eda_", "")
-                                        .replace("_", " ").title())
-                                st.image(_img, caption=_cap, use_column_width=True)
-                        _ti += 1
-                    if model_imgs:
-                        with chart_tabs[_ti]:
-                            for _name, _img in model_imgs.items():
-                                _cap = (_name.split("/")[-1]
-                                        .replace(".png", "").replace("model_", "")
-                                        .replace("_", " ").title())
-                                st.image(_img, caption=_cap, use_column_width=True)
-                        _ti += 1
-                    if shap_imgs:
-                        with chart_tabs[_ti]:
-                            for _name, _img in shap_imgs.items():
-                                _cap = (_name.split("/")[-1]
-                                        .replace(".png", "").replace("shap_", "")
-                                        .replace("_", " ").title())
-                                st.image(_img, caption=_cap, use_column_width=True)
-
-                # HTML completo come expander collassato (sempre utile come riferimento)
-                _html = _find_html_report(seed, zip_path=_zip_path)
-                if _html:
-                    with st.expander("📄 Report HTML completo", expanded=False):
-                        components.html(_html, height=900, scrolling=True)
-            else:
-                # Nessun PNG nello ZIP (ZIP vecchi) — fallback iframe HTML
-                _html = _find_html_report(seed, zip_path=_zip_path)
-                if _html:
-                    with st.expander("📄 Report completo del gruppo", expanded=False):
-                        components.html(_html, height=900, scrolling=True)
-                else:
-                    st.caption(
-                        "📄 Report non ancora ricevuto — atteso nello ZIP "
-                        "o come `team_seed_{:02d}_report.html`".format(seed)
+            # ── 8. Valutazione docente ───────────────────────────────────────
+            with st.expander("📈 8 — Valutazione sul Test Set", expanded=already_evaluated):
+                col_btn, col_hint = st.columns([2, 5])
+                with col_btn:
+                    eval_btn = st.button(
+                        f"▶ Evaluta Seed {seed:02d}",
+                        key=f"eval_{seed}",
+                        type="primary" if not already_evaluated else "secondary",
+                        use_container_width=True,
                     )
+                with col_hint:
+                    if already_evaluated:
+                        st.caption("Già valutato — clicca di nuovo per rivalutare.")
+                    else:
+                        st.caption(f"File: `{path.name}`")
+
+                if eval_btn:
+                    with st.spinner(f"Valutazione Seed {seed:02d}…"):
+                        try:
+                            result = _evaluate_bundle(seed, path)
+                            st.session_state["results"][seed] = result
+                            auc_te = result["auc_test"]
+                            delta = result["delta_auc"]
+                            flag = "⚠️ possibile overfitting" if delta < -0.05 else "✅ ok"
+                            st.success(
+                                f"**AUC test: {auc_te:.4f}** &nbsp;|&nbsp; "
+                                f"Δ: {delta:+.4f} &nbsp; {flag}"
+                            )
+                        except FileNotFoundError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"Errore durante la valutazione: {e}")
+
+                if seed in st.session_state["results"]:
+                    _render_metrics(st.session_state["results"][seed])
+                    r = st.session_state["results"][seed]
+                    score = _normalized_score(r["auc_test"], seed)
+                    best_auc = _BEST_AUC.get(seed)
+                    if best_auc is not None:
+                        s_str = f"{score:.2%}" if not (isinstance(score, float) and np.isnan(score)) else "—"
+                        st.markdown(
+                            f"""
+                            <div style='margin-top:0.5rem;padding:0.6rem 1rem;
+                                background:rgba(240,165,0,0.1);border-radius:8px;
+                                border-left:3px solid #f0a500;'>
+                            <strong>Score normalizzato: {s_str}</strong> &nbsp;·&nbsp;
+                            Best AUC istruttore: <code>{best_auc:.4f}</code> &nbsp;·&nbsp;
+                            Score = (AUC_test − 0.5) / (AUC_istruttore − 0.5)
+                            </div>""",
+                            unsafe_allow_html=True,
+                        )
 
             st.markdown("<hr class='thin-divider'>", unsafe_allow_html=True)
 
