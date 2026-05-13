@@ -126,7 +126,8 @@ def generate_html_report(
     final_model_idx: int,
     final_model_figures: list[tuple[str, plt.Figure]],
     feature_importance_fig: plt.Figure | None,
-    team_notes: dict[str, str],
+    shap_figures: list[tuple[str, plt.Figure]] | None = None,
+    team_notes: dict[str, str] = None,
     output_dir: Path | str = "challenge/outputs",
 ) -> Path:
     """Genera un report HTML standalone e lo salva su disco.
@@ -167,6 +168,8 @@ def generate_html_report(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    if team_notes is None:
+        team_notes = {}
 
     parts: list[str] = []
     parts.append("<!DOCTYPE html><html lang='it'><head>")
@@ -280,6 +283,23 @@ def generate_html_report(
         parts.append("<h2>6. Feature Importance</h2>")
         b64 = _fig_to_base64(feature_importance_fig)
         parts.append(f"<div class='fig-container'>{_img_tag(b64, 'Feature Importance', '90%')}</div>")
+        parts.append("</div>")
+
+    # --- SHAP ---
+    if shap_figures:
+        parts.append("<div class='section'>")
+        parts.append("<h2>6b. Interpretabilità SHAP</h2>")
+        parts.append(
+            "<p style='color:#555;font-size:0.92em;margin-bottom:14px;'>"
+            "SHAP (SHapley Additive exPlanations) quantifica il contributo di ogni feature "
+            "alla singola predizione. Il <b>summary plot</b> mostra l'impatto globale; "
+            "il <b>waterfall</b> spiega la predizione del cliente a rischio più alto."
+            "</p>"
+        )
+        for title, fig in shap_figures:
+            b64 = _fig_to_base64(fig)
+            parts.append(f"<h3>{_escape(title)}</h3>")
+            parts.append(f"<div class='fig-container'>{_img_tag(b64, title, '90%')}</div>")
         parts.append("</div>")
 
     # --- Team Interpretation ---

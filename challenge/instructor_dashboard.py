@@ -14,6 +14,7 @@ I .joblib consegnati dagli studenti vanno copiati in:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -41,6 +43,16 @@ DATASETS_DIR = SCRIPT_DIR / "datasets"
 SUBMISSIONS_DIR = SCRIPT_DIR / "submissions"
 
 TARGET_COLUMN = "Exited"
+
+# Cheatsheet docente — baseline AUC per seed
+_CHEATSHEET_PATH = SCRIPT_DIR / "instructor_cheatsheet.json"
+if _CHEATSHEET_PATH.exists():
+    _BEST_AUC: dict[int, float] = {
+        e["seed"]: e["best_auc"]
+        for e in json.loads(_CHEATSHEET_PATH.read_text(encoding="utf-8"))
+    }
+else:
+    _BEST_AUC = {}
 
 # Colori semantici (compatibili dark/light Streamlit)
 COLOR_GOLD = "#f0a500"
@@ -296,7 +308,7 @@ def _evaluate_bundle(seed: int, path: Path) -> dict[str, Any]:
 
 
 def _scan_submissions() -> dict[int, Path]:
-    """Restituisce {seed: path} per tutti i model_seed_XX.joblib trovati."""
+    """Restituisce {seed: path_joblib} per tutti i model_seed_XX.joblib trovati."""
     SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
     found: dict[int, Path] = {}
     for p in sorted(SUBMISSIONS_DIR.glob("model_seed_*.joblib")):
@@ -306,6 +318,30 @@ def _scan_submissions() -> dict[int, Path]:
         except ValueError:
             continue
     return found
+
+
+def _find_html_report(seed: int) -> Path | None:
+    """Cerca il report HTML del gruppo per il seed dato."""
+    candidates = [
+        SUBMISSIONS_DIR / f"team_seed_{seed:02d}_report.html",
+        SUBMISSIONS_DIR / f"report_seed_{seed:02d}.html",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
+def _normalized_score(auc_test: float, seed: int) -> float:
+    """Score normalizzato: (AUC_studente - 0.5) / (AUC_istruttore - 0.5).
+
+    Permette confronto equo tra seed di diversa difficoltà.
+    Score = 1.0 significa pari all'istruttore; > 1.0 = meglio dell'istruttore.
+    """
+    best = _BEST_AUC.get(seed)
+    if best is None or best <= 0.5:
+        return float("nan")
+    return (auc_test - 0.5) / (best - 0.5)
 
 
 def _group_label(bundle: dict[str, Any]) -> str:
@@ -522,6 +558,15 @@ with tab_submissions:
             if seed in st.session_state["results"]:
                 _render_metrics(st.session_state["results"][seed])
 
+            # Report HTML inline
+            html_path = _find_html_report(seed)
+            if html_path:
+                with st.expander("📄 Report completo del gruppo", expanded=False):
+                    html_content = html_path.read_text(encoding="utf-8")
+                    components.html(html_content, height=900, scrolling=True)
+            else:
+                st.caption("📄 Report HTML non ancora ricevuto — atteso `team_seed_{:02d}_report.html` in submissions/".format(seed))
+
             st.markdown("<hr class='thin-divider'>", unsafe_allow_html=True)
 
 # ── Tab 2: Leaderboard ────────────────────────────────────────────────────────
@@ -563,10 +608,19 @@ with tab_leaderboard:
             "Usa la tab **📋 Submissions** per valutare i gruppi durante i pitch."
         )
     else:
-        rows = sorted(results_so_far.values(), key=lambda r: r["auc_test"], reverse=True)
+        # Calcola score normalizzato e ordina per score
+        for r in results_so_far.values():
+            r["score"] = _normalized_score(r["auc_test"], r["seed"])
+
+        rows = sorted(
+            results_so_far.values(),
+            key=lambda r: r.get("score", 0) if not (isinstance(r.get("score"), float) and np.isnan(r.get("score", 0))) else 0,
+            reverse=True,
+        )
 
         # Costruisci tabella con badge HTML per rank e overfitting
         rank_icons = {1: "🥇", 2: "🥈", 3: "🥉"}
+        has_cheatsheet = bool(_BEST_AUC)
 
         table_rows_html = ""
         for rank, r in enumerate(rows, 1):
@@ -578,6 +632,9 @@ with tab_leaderboard:
             delta_style = f"color:{COLOR_RED};font-weight:700;" if delta < -0.05 else f"color:{COLOR_GREEN};"
             badge = '<span class="badge-overfitting">⚠️ overfitting</span>' if delta < -0.05 else '<span class="badge-ok">✅ ok</span>'
             auc_style = "font-weight:800;font-size:1.05rem;" if rank == 1 else ""
+            score = r.get("score", float("nan"))
+            score_str = f"{score:.2%}" if not (isinstance(score, float) and np.isnan(score)) else "—"
+            score_style = "font-weight:800;color:#f0a500;" if rank == 1 else ""
             table_rows_html += f"""
             <tr>
                 <td style="text-align:center;font-size:1.2rem;">{rank_display}</td>
@@ -588,10 +645,11 @@ with tab_leaderboard:
                 <td style="text-align:right;{auc_style}color:{COLOR_BLUE};">{r['auc_test']:.4f}</td>
                 <td style="text-align:right;{delta_style}">{delta:+.4f}</td>
                 <td style="text-align:right;">{r['f1']:.4f}</td>
-                <td style="text-align:right;opacity:0.65;">{r['accuracy']:.4f}</td>
+                <td style="text-align:right;{score_style}">{score_str}</td>
                 <td>{badge}</td>
             </tr>"""
 
+        score_header = "<th style='text-align:right;padding:0.5rem 0.7rem;'>Score</th>" if has_cheatsheet else ""
         st.markdown(
             f"""
             <table style="width:100%;border-collapse:collapse;font-size:0.95rem;">
@@ -606,7 +664,7 @@ with tab_leaderboard:
                         <th style="text-align:right;padding:0.5rem 0.7rem;">AUC test</th>
                         <th style="text-align:right;padding:0.5rem 0.7rem;">Δ</th>
                         <th style="text-align:right;padding:0.5rem 0.7rem;">F1</th>
-                        <th style="text-align:right;padding:0.5rem 0.7rem;">Accuracy</th>
+                        {score_header}
                         <th style="padding:0.5rem 0.7rem;">Stato</th>
                     </tr>
                 </thead>
@@ -615,6 +673,7 @@ with tab_leaderboard:
                 </tbody>
             </table>
             <div style="margin-top:0.8rem;font-size:0.8rem;opacity:0.5;">
+                Score = (AUC_test − 0.5) / (AUC_istruttore − 0.5) &nbsp;·&nbsp;
                 Δ = AUC_test − AUC_train &nbsp;·&nbsp; ⚠️ overfitting se Δ &lt; −0.05
             </div>
             """,
